@@ -18,8 +18,8 @@ import {
 import { BoatLifeJacketState, LifeJacketInspectionRecord, LifeJacketItemStatus, OverallStatus, BoatSeatLifeJacket } from '../types';
 import ImageUpload from './ImageUpload';
 
-const ctbLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/ctb_boat_layout.jpg';
-const rLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/r_boat_layout.jpg';
+import ctbLayoutImg from '../../Image/Layout_CTB_Boat.jpg';
+import rLayoutImg from '../../Image/Layout_R_Boat.png';
 
 // Helper to generate dynamic 6-column seats (13 rows for CTB, 10 rows for R)
 const generateDefaultSeats = (boatName?: string): BoatSeatLifeJacket[] => {
