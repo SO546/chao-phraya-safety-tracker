@@ -16,9 +16,16 @@ const removeModuleType = () => {
   }
 }
 
+const isGasBuild = process.env.GAS_BUILD === 'true';
+
 export default defineConfig(() => {
+  const plugins = [react(), tailwindcss()];
+  if (isGasBuild) {
+    plugins.push(viteSingleFile(), removeModuleType());
+  }
+
   return {
-    plugins: [react(), tailwindcss(), viteSingleFile(), removeModuleType()],
+    plugins: plugins.filter(Boolean),
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -26,17 +33,16 @@ export default defineConfig(() => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     build: {
-      target: "es2015",
+      target: 'es2015',
       rollupOptions: {
         output: {
-          format: 'iife' as const,
-          inlineDynamicImports: true,
+          ...(isGasBuild ? { format: 'iife' as const, inlineDynamicImports: true } : {}),
           entryFileNames: 'assets/[name].js',
           chunkFileNames: 'assets/[name].js',
           assetFileNames: 'assets/[name].[ext]'
