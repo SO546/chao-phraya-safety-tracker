@@ -91,15 +91,17 @@ function SeatMapGrid({
       else if (col === 'E') top = 64.5;
       else if (col === 'F') top = 72.5;
     } else {
-      // R Layout
-      // Cabin spans from x: 24.0% to x: 72.0%
-      left = 24.0 + (rowNum - 1) * ((72.0 - 24.0) / (maxRows - 1));
-      if (col === 'A') top = 21.0;
-      else if (col === 'B') top = 29.0;
-      else if (col === 'C') top = 37.0;
-      else if (col === 'D') top = 51.0;
-      else if (col === 'E') top = 59.0;
-      else if (col === 'F') top = 67.0;
+      // R Layout — mapped to actual chair positions on Layout_R_Boat.png
+      // Seating cabin spans x: 18% (stern/entry side, row 1) to 72% (bow side, row 21)
+      left = 18.0 + (rowNum - 1) * ((72.0 - 18.0) / (maxRows - 1));
+      // Upper deck rows (port side)
+      if (col === 'A') top = 14.0;
+      else if (col === 'B') top = 21.0;
+      else if (col === 'C') top = 28.0;
+      // Lower deck rows (starboard side)
+      else if (col === 'D') top = 55.0;
+      else if (col === 'E') top = 62.0;
+      else if (col === 'F') top = 69.0;
     }
 
     return { left: `${left}%`, top: `${top}%` };
@@ -132,11 +134,11 @@ function SeatMapGrid({
         { x: 70.5, y: 41.5, label: '5', key: 'cabinetStatus', name: 'ตู้เก็บชูชีพ', desc: 'ตู้เก็บ/ที่จัดเก็บ (Storage Cabinet)' },
       ]
     : [
-        { x: 20.2, y: 19.5, label: '1', key: 'adultsStatus', name: 'ชูชีพผู้ใหญ่', desc: 'ชูชีพผู้ใหญ่ (Adults)' },
-        { x: 62.9, y: 42.4, label: '2', key: 'kidsStatus', name: 'ชูชีพเด็ก', desc: 'ชูชีพเด็ก (Kids)' },
-        { x: 62.9, y: 47.6, label: '3', key: 'whistleStatus', name: 'นกหวีด', desc: 'นกหวีด (Whistle)' },
-        { x: 20.2, y: 69.0, label: '4', key: 'lightStatus', name: 'ไฟสัญญาณ', desc: 'ไฟสัญญาณ (Indicator Light)' },
-        { x: 65.0, y: 45.0, label: '5', key: 'cabinetStatus', name: 'ตู้เก็บชูชีพ', desc: 'ตู้เก็บ/ที่จัดเก็บ (Storage Cabinet)' },
+        { x: 18.0, y: 14.0, label: '1', key: 'adultsStatus', name: 'ชูชีพผู้ใหญ่', desc: 'ชูชีพผู้ใหญ่ (Adults) — จุดที่ 1 ฝั่งซ้ายท้ายเรือ' },
+        { x: 58.0, y: 38.0, label: '2', key: 'kidsStatus', name: 'ชูชีพเด็ก', desc: 'ชูชีพเด็ก (Kids) — จุดที่ 2 ฝั่งซ้ายกลางเรือ' },
+        { x: 58.0, y: 50.0, label: '3', key: 'whistleStatus', name: 'นกหวีด', desc: 'นกหวีด (Whistle) — จุดที่ 3 ฝั่งขวากลางเรือ' },
+        { x: 18.0, y: 76.0, label: '4', key: 'lightStatus', name: 'ไฟสัญญาณ', desc: 'ไฟสัญญาณ (Indicator Light) — จุดที่ 4 ฝั่งขวาท้ายเรือ' },
+        { x: 75.0, y: 44.0, label: '5', key: 'cabinetStatus', name: 'ตู้เก็บชูชีพ', desc: 'ตู้เก็บ/ที่จัดเก็บ (Storage Cabinet) — หัวเรือ' },
       ];
 
   return (
