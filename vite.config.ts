@@ -8,33 +8,10 @@ const removeModuleType = () => {
   return {
     name: 'remove-module-type',
     enforce: 'post' as const,
-    generateBundle(_, bundle: any) {
-      if (bundle['index.html']) {
-        let html = bundle['index.html'].source;
-        // Remove type="module" and crossorigin
-        html = html.replace(/type="module"\s*/g, '');
-        html = html.replace(/crossorigin\s*/g, '');
-        
-        // Wrap the contents of the main script tag
-        // Since we are not sure exactly which script, we wrap all script tags contents
-        // Wait, it's better to just move the script tags to the body end.
-        const headScriptRegex = /<head>([\s\S]*?)<\/head>/;
-        const headMatch = html.match(headScriptRegex);
-        if (headMatch) {
-          let headContent = headMatch[1];
-          let scripts: string[] = [];
-          
-          headContent = headContent.replace(/<script[^>]*>([\s\S]*?)<\/script>/g, (match, content) => {
-            scripts.push(match);
-            return '';
-          });
-          
-          html = html.replace(headMatch[0], `<head>${headContent}</head>`);
-          html = html.replace('</body>', `${scripts.join('\n')}</body>`);
-        }
-        
-        bundle['index.html'].source = html;
-      }
+    transformIndexHtml(html: string) {
+      return html
+        .replace(/type="module"\s*/g, '')
+        .replace(/crossorigin\s*/g, '');
     }
   }
 }
