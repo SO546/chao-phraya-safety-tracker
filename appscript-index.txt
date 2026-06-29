@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chao Phraya Safety Tracker</title>
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #0f172a; /* Slate 900 */
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      .loader-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background-color: #0f172a;
+        z-index: 9999;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+      .loader-container.hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+      .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.1);
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        border-left-color: #3b82f6; /* Blue 500 */
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .loading-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        letter-spacing: 0.05em;
+        color: #f1f5f9;
+      }
+      .loading-text {
+        font-size: 14px;
+        color: #94a3b8; /* Slate 400 */
+      }
+      .error-box {
+        display: none;
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        padding: 20px;
+        border-radius: 8px;
+        max-width: 500px;
+        text-align: center;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- หน้าจอโหลดความปลอดภัย (จะถูกซ่อนโดยอัตโนมัติเมื่อแอปหลักโหลดเสร็จ) -->
+    <div id="loader" class="loader-container">
+      <div id="spinner" class="spinner"></div>
+      <div class="loading-title">CHAO PHRAYA SAFETY TRACKER</div>
+      <div id="loading-desc" class="loading-text">กำลังโหลดระบบความปลอดภัยเรือท่องเที่ยว...</div>
+      <div id="error-message" class="error-box">
+        <h4 style="margin: 0 0 10px 0;">เชื่อมต่อระบบล้มเหลว (Connection Timeout)</h4>
+        <p style="font-size: 13px; margin: 0; line-height: 1.5;">ไม่สามารถโหลดสคริปต์หลักของแอปพลิเคชันได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต หรือติดต่อผู้ดูแลระบบเพื่อตรวจสอบสถานะเซิร์ฟเวอร์</p>
+      </div>
+    </div>
+
+    <!-- โครงสร้างหลักของ React App -->
+    <div id="root"></div>
+
+    <!-- ส่งต่อสิทธิ์ Access Token จาก Google Apps Script (SSO Auto-Login) -->
+    <script>
+      window.googleAppsScriptData = {
+        token: "<?= accessToken ?>",
+        email: "<?= userEmail ?>"
+      };
+      
+      // ฟังก์ชันสำหรับซ่อนหน้าจอโหลด
+      function hideLoader() {
+        var loader = document.getElementById('loader');
+        if (loader) {
+          loader.classList.add('hidden');
+        }
+      }
+    </script>
+
+    <!-- โหลดระบบหลักของแอปแบบ Asynchronous จาก Cloud Run เซิร์ฟเวอร์แม่ข่าย -->
+    <script 
+      src="https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/assets/index.js"
+      onerror="handleLoadError()"
+    ></script>
+
+    <script>
+      // จัดการข้อผิดพลาดกรณีโหลดสคริปต์จากเซิร์ฟเวอร์ไม่ได้
+      function handleLoadError() {
+        var spinner = document.getElementById('spinner');
+        var desc = document.getElementById('loading-desc');
+        var errBox = document.getElementById('error-message');
+        if (spinner) spinner.style.display = 'none';
+        if (desc) desc.style.display = 'none';
+        if (errBox) errBox.style.display = 'block';
+      }
+
+      // ระบบช่วยเหลือ: ซ่อมแซมหน้าจอค้างหลังจาก 20 วินาที 
+      // หากพบว่าแอปทำงานแล้วให้เปิดหน้าจอ หากแอปยังพังอยู่จะแสดงคำแนะนำที่มีประโยชน์
+      setTimeout(function() {
+        var root = document.getElementById('root');
+        if (root && root.innerHTML !== '') {
+          hideLoader();
+        } else {
+          // หากผ่านไป 20 วินาทีแล้วยังไม่มีหน้าจอ React แสดงว่าโหลดสคริปต์ล้มเหลว
+          handleLoadError();
+        }
+      }, 20000);
+    </script>
+  </body>
+</html>

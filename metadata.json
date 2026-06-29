@@ -1,0 +1,6 @@
+{
+  "name": "Chao Phraya Fleet Safety & Compliance Suite",
+  "description": "ระบบบันทึกและตรวจสอบความปลอดภัยแบบครบวงจร (ถังดับเพลิง เสื้อชูชีพ ตู้ยาเวชภัณฑ์ และใบอนุญาตใช้เรือ) สำหรับเรือท่องเที่ยว 7 ลำและท่าเทียบเรือ 11 ท่า พร้อมระบบดาวน์โหลดและซิงค์รายงานคลาวด์",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ระบบตรวจสอบถังดับเพลิงเรือท่องเที่ยว | Chao Phraya Fire Safety Tracker</title>
+    <script>
+      // Global error handler for restricted environments like Google Apps Script iframe
+      window.addEventListener('error', function(e) {
+        showErrorOverlay(e.message, e.filename + ':' + e.lineno);
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        showErrorOverlay(e.reason ? (e.reason.message || e.reason) : 'Unhandled promise rejection', '');
+      });
+      function showErrorOverlay(msg, loc) {
+        var errDiv = document.getElementById('error-overlay');
+        if (!errDiv) {
+          errDiv = document.createElement('div');
+          errDiv.id = 'error-overlay';
+          errDiv.style = 'position:fixed;top:10px;left:10px;right:10px;background:#fff1f2;border:2px solid #f43f5e;color:#9f1239;padding:20px;font-family:sans-serif;z-index:999999;border-radius:8px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);max-height:90vh;overflow:auto;';
+          errDiv.innerHTML = '<h3 style="margin-top:0;color:#e11d48;font-size:18px;">พบข้อผิดพลาดในการโหลดระบบ (Load Error)</h3>' +
+            '<p style="font-size:14px;margin-bottom:15px;">หากแอปพลิเคชันนี้ทำงานอยู่บน Google Apps Script ข้อผิดพลาดนี้อาจเกิดจากการบล็อกสิทธิ์หรือข้อจำกัดด้านความปลอดภัยของเบราว์เซอร์</p>' +
+            '<div style="background:#ffe4e6;padding:10px;border-radius:4px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;" id="error-msg"></div>' +
+            '<p style="font-size:12px;margin-top:15px;color:#4c0519;"><b>คำแนะนำในการแก้ไข:</b><br>1. ตรวจสอบให้แน่ใจว่าเบราว์เซอร์ไม่ได้บล็อกคุกกี้บุคคลที่สาม (Third-party Cookies)<br>2. ลองเปิดลิงก์ในหน้าต่างไม่ระบุตัวตน (Incognito) หรือเบราว์เซอร์อื่น เช่น Chrome หรือ Firefox</p>';
+          document.body.appendChild(errDiv);
+        }
+        var msgBox = document.getElementById('error-msg');
+        if (msgBox) {
+          msgBox.innerText += '\nError: ' + msg + (loc ? ' at ' + loc : '');
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
