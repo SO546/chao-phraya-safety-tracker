@@ -61,6 +61,84 @@ function SeatMapGrid({
 }: SeatMapGridProps) {
   const [viewMode, setViewMode] = useState<'diagram' | 'table'>('diagram');
 
+  // Load custom coordinates from localStorage if available
+  const [customCoords, setCustomCoords] = useState<{ [seatId: string]: { left: string; top: string } }>(() => {
+    try {
+      const saved = localStorage.getItem(`chao_phraya_seat_coords_${boatName || 'default'}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const [draggingSeat, setDraggingSeat] = useState<string | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [hasMoved, setHasMoved] = useState(false);
+
+  // Global drag handling
+  useEffect(() => {
+    if (!draggingSeat) return;
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+      if (dragStartPos) {
+        const dx = Math.abs(clientX - dragStartPos.x);
+        const dy = Math.abs(clientY - dragStartPos.y);
+        if (dx > 4 || dy > 4) {
+          setHasMoved(true);
+        }
+      }
+
+      const container = document.getElementById(`seat-map-container-${boatName || 'default'}`);
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const left = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+      const top = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+
+      setCustomCoords(prev => ({
+        ...prev,
+        [draggingSeat]: { left: `${left.toFixed(2)}%`, top: `${top.toFixed(2)}%` }
+      }));
+    };
+
+    const handleEnd = () => {
+      setDraggingSeat(null);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [draggingSeat, dragStartPos, boatName]);
+
+  // Persist customCoords whenever they change
+  useEffect(() => {
+    if (Object.keys(customCoords).length > 0) {
+      localStorage.setItem(`chao_phraya_seat_coords_${boatName || 'default'}`, JSON.stringify(customCoords));
+    }
+  }, [customCoords, boatName]);
+
+  const handleSeatStart = (e: React.MouseEvent | React.TouchEvent, seatId: string) => {
+    if (!interactive) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    setDragStartPos({ x: clientX, y: clientY });
+    setHasMoved(false);
+    setDraggingSeat(seatId);
+  };
+
   const isCTB = boatName ? boatName.toUpperCase().startsWith('CTB') : true;
   const layoutImg = isCTB ? ctbLayoutImg : rLayoutImg;
 
@@ -73,6 +151,10 @@ function SeatMapGrid({
     : (isCTB ? 22 : 21);
 
   const getSeatCoords = (seatId: string) => {
+    if (customCoords[seatId]) {
+      return customCoords[seatId];
+    }
+
     const match = seatId.match(/^(\d+)([A-F])$/);
     if (!match) return { left: '0%', top: '0%' };
     const rowNum = parseInt(match[1]);
@@ -151,34 +233,53 @@ function SeatMapGrid({
             🚢 {boatName || 'Standard'} Seat Map
           </span>
         </div>
-        <div className="flex bg-slate-900 p-0.5 rounded border border-slate-800 text-[9px] md:text-[10px]">
-          <button
-            type="button"
-            onClick={() => setViewMode('diagram')}
-            className={`px-2 py-0.5 rounded-xs font-bold flex items-center gap-1 cursor-pointer transition-colors ${
-              viewMode === 'diagram' ? 'bg-orange-650 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Map className="h-2.5 w-2.5" />
-            ผังเรือจริง (Layout)
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('table')}
-            className={`px-2 py-0.5 rounded-xs font-bold flex items-center gap-1 cursor-pointer transition-colors ${
-              viewMode === 'table' ? 'bg-orange-650 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Grid className="h-2.5 w-2.5" />
-            ตารางย่อ (Grid)
-          </button>
+        <div className="flex items-center gap-1.5">
+          <div className="flex bg-slate-900 p-0.5 rounded border border-slate-800 text-[9px] md:text-[10px]">
+            <button
+              type="button"
+              onClick={() => setViewMode('diagram')}
+              className={`px-2 py-0.5 rounded-xs font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                viewMode === 'diagram' ? 'bg-orange-650 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Map className="h-2.5 w-2.5" />
+              ผังเรือจริง (Layout)
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-2 py-0.5 rounded-xs font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                viewMode === 'table' ? 'bg-orange-650 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Grid className="h-2.5 w-2.5" />
+              ตารางย่อ (Grid)
+            </button>
+          </div>
+          {viewMode === 'diagram' && Object.keys(customCoords).length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('คุณต้องการรีเซ็ตตำแหน่งที่นั่งกลับเป็นค่าเริ่มต้นใช่หรือไม่?')) {
+                  setCustomCoords({});
+                  localStorage.removeItem(`chao_phraya_seat_coords_${boatName || 'default'}`);
+                }
+              }}
+              className="px-2 py-0.5 rounded border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors text-[9px] font-bold"
+            >
+              🔄 รีเซ็ต
+            </button>
+          )}
         </div>
       </div>
 
       {viewMode === 'diagram' ? (
         <div className="p-3 bg-slate-950 space-y-3">
           <div className="overflow-x-auto pb-2 scrollbar-thin">
-            <div className="relative w-full min-w-[760px] aspect-[1000/420] bg-white rounded border border-slate-800 overflow-hidden shadow-2xl mx-auto">
+            <div 
+              id={`seat-map-container-${boatName || 'default'}`}
+              className="relative w-full min-w-[760px] aspect-[1000/420] bg-white rounded border border-slate-800 overflow-hidden shadow-2xl mx-auto"
+            >
               
               {/* Image background */}
               <img
@@ -211,21 +312,37 @@ function SeatMapGrid({
                     ? 'bg-rose-600 hover:bg-rose-550 border-rose-700 text-white animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)] border-red-500'
                     : 'bg-amber-500 hover:bg-amber-455 border-amber-600 text-slate-950 shadow-[0_0_6px_rgba(245,158,11,0.5)]';
 
+                const isDraggingThis = draggingSeat === seat.id;
+
                 return (
                   <button
                     key={seat.id}
                     type="button"
-                    disabled={!interactive}
-                    onClick={() => onSeatClick && onSeatClick(seat.id)}
-                    style={getSeatCoords(seat.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full border flex items-center justify-center font-mono font-extrabold text-[7px] transition-all z-20 ${statusColor} ${
+                    onMouseDown={(e) => handleSeatStart(e, seat.id)}
+                    onTouchStart={(e) => handleSeatStart(e, seat.id)}
+                    onClick={(e) => {
+                      if (hasMoved) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                      }
+                      onSeatClick && onSeatClick(seat.id);
+                    }}
+                    style={{
+                      ...getSeatCoords(seat.id),
+                      transition: isDraggingThis ? 'none' : undefined,
+                      cursor: interactive ? (isDraggingThis ? 'grabbing' : 'grab') : 'default'
+                    }}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full border flex items-center justify-center font-mono font-extrabold text-[7px] z-20 ${statusColor} ${
+                      isDraggingThis ? 'scale-125 ring-2 ring-orange-500 z-30' : ''
+                    } ${
                       interactive 
-                        ? 'cursor-pointer hover:scale-125 active:scale-95' 
-                        : 'cursor-default'
+                        ? 'hover:scale-125 active:scale-95' 
+                        : ''
                     }`}
                     title={`ที่นั่ง ${seat.id}: ${
                       seat.status === 'green' ? 'มีเสื้อชูชีพปกติ' : seat.status === 'red' ? 'ไม่มีเสื้อชูชีพ' : 'มีเสื้อชูชีพแต่ชำรุด/เก่า'
-                    }`}
+                    } (ลากเพื่อเคลื่อนย้ายอิสระได้)`}
                   >
                     {seat.id}
                   </button>
