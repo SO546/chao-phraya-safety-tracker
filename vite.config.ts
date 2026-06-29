@@ -36,7 +36,9 @@ export default defineConfig(() => {
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: ['**/Layout_CTB_R_Boat/**', '**/*.jpg', '**/*.png', '**/*.gif', '**/*.txt', '**/*.log']
+      },
     },
     build: {
       target: 'es2015',
