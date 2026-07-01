@@ -32,6 +32,7 @@ import {
   syncMaintenanceToSheets
 } from './lib/sheets';
 import { uploadPhotoIfNeeded, uploadPhotosIfNeeded } from './lib/storage';
+import { saveToCloud, loadAllFromCloud } from './lib/firestore';
 
 import Dashboard from './components/Dashboard';
 import BoatList from './components/BoatList';
@@ -97,6 +98,7 @@ export default function App() {
   // Loading States
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
+  const [isCloudLoading, setIsCloudLoading] = useState(true);
   
   // Inspection Modal State
   const [inspectingExt, setInspectingExt] = useState<FireExtinguisher | null>(null);
@@ -697,12 +699,77 @@ export default function App() {
     }
   }, []);
 
+  // ======== Cloud Sync: Load from Firestore on mount ========
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloudData = await loadAllFromCloud();
+        if (cancelled || !cloudData) {
+          setIsCloudLoading(false);
+          return;
+        }
+
+        // Only override if cloud has actual data for each key
+        if (cloudData['boat_fire_extinguishers'] && Array.isArray(cloudData['boat_fire_extinguishers']) && cloudData['boat_fire_extinguishers'].length > 0) {
+          setExtinguishers(cloudData['boat_fire_extinguishers']);
+          localStorage.setItem('boat_fire_extinguishers', JSON.stringify(cloudData['boat_fire_extinguishers']));
+        }
+        if (cloudData['boat_inspection_history'] && Array.isArray(cloudData['boat_inspection_history'])) {
+          setHistory(cloudData['boat_inspection_history']);
+          localStorage.setItem('boat_inspection_history', JSON.stringify(cloudData['boat_inspection_history']));
+        }
+        if (cloudData['boat_medical_stations'] && Array.isArray(cloudData['boat_medical_stations']) && cloudData['boat_medical_stations'].length > 0) {
+          setMedicalStations(cloudData['boat_medical_stations']);
+          localStorage.setItem('boat_medical_stations', JSON.stringify(cloudData['boat_medical_stations']));
+        }
+        if (cloudData['boat_medical_history'] && Array.isArray(cloudData['boat_medical_history'])) {
+          setMedicalHistory(cloudData['boat_medical_history']);
+          localStorage.setItem('boat_medical_history', JSON.stringify(cloudData['boat_medical_history']));
+        }
+        if (cloudData['boat_licenses'] && Array.isArray(cloudData['boat_licenses']) && cloudData['boat_licenses'].length > 0) {
+          setBoatLicenses(cloudData['boat_licenses']);
+          localStorage.setItem('boat_licenses', JSON.stringify(cloudData['boat_licenses']));
+        }
+        if (cloudData['boat_license_history'] && Array.isArray(cloudData['boat_license_history'])) {
+          setLicenseHistory(cloudData['boat_license_history']);
+          localStorage.setItem('boat_license_history', JSON.stringify(cloudData['boat_license_history']));
+        }
+        if (cloudData['boat_life_jackets'] && Array.isArray(cloudData['boat_life_jackets']) && cloudData['boat_life_jackets'].length > 0) {
+          setLifeJackets(cloudData['boat_life_jackets']);
+          localStorage.setItem('boat_life_jackets', JSON.stringify(cloudData['boat_life_jackets']));
+        }
+        if (cloudData['boat_life_jacket_history'] && Array.isArray(cloudData['boat_life_jacket_history'])) {
+          setLifeJacketHistory(cloudData['boat_life_jacket_history']);
+          localStorage.setItem('boat_life_jacket_history', JSON.stringify(cloudData['boat_life_jacket_history']));
+        }
+        if (cloudData['boat_maintenance_history'] && Array.isArray(cloudData['boat_maintenance_history']) && cloudData['boat_maintenance_history'].length > 0) {
+          setMaintenanceRecords(cloudData['boat_maintenance_history']);
+          localStorage.setItem('boat_maintenance_history', JSON.stringify(cloudData['boat_maintenance_history']));
+        }
+
+        console.log('[CloudSync] Successfully loaded data from Firestore');
+      } catch (err) {
+        console.warn('[CloudSync] Failed to load from cloud, using localStorage:', err);
+      } finally {
+        if (!cancelled) setIsCloudLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Show dynamic notification helper
   const triggerToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
     }, 5000);
+  };
+
+  // ======== Persist data to both localStorage AND Firestore ========
+  const persistData = (key: string, data: any) => {
+    localStorage.setItem(key, JSON.stringify(data));
+    saveToCloud(key, data).catch(() => {}); // fire-and-forget cloud save
   };
 
   // Google OAuth Login
@@ -845,7 +912,7 @@ export default function App() {
 
     const newHistory = [newRecord, ...history];
     setHistory(newHistory);
-    localStorage.setItem('boat_inspection_history', JSON.stringify(newHistory));
+    persistData('boat_inspection_history', newHistory);
 
     const updatedExts = extinguishers.map((e) => {
       if (e.id === inspectingExt.id) {
@@ -870,7 +937,7 @@ export default function App() {
     });
 
     setExtinguishers(updatedExts);
-    localStorage.setItem('boat_fire_extinguishers', JSON.stringify(updatedExts));
+    persistData('boat_fire_extinguishers', updatedExts);
 
     triggerToast(`บันทึกผลตรวจสอบถังดับเพลิง ${inspectingExt.id} เสร็จสิ้นแล้ว!`, 'success');
 
@@ -908,7 +975,7 @@ export default function App() {
 
     const newHistory = [newRecord, ...medicalHistory];
     setMedicalHistory(newHistory);
-    localStorage.setItem('boat_medical_history', JSON.stringify(newHistory));
+    persistData('boat_medical_history', newHistory);
 
     const updatedStations = medicalStations.map((st) => {
       if (st.id === recordData.stationId) {
@@ -948,7 +1015,7 @@ export default function App() {
     });
 
     setMedicalStations(updatedStations);
-    localStorage.setItem('boat_medical_stations', JSON.stringify(updatedStations));
+    persistData('boat_medical_stations', updatedStations);
 
     triggerToast(`บันทึกการตรวจเช็คเวชภัณฑ์สำหรับ ${recordData.targetName} เรียบร้อยแล้ว!`, 'success');
 
@@ -976,7 +1043,7 @@ export default function App() {
     if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบเวชภัณฑ์นี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้')) return;
     const newHistory = medicalHistory.filter(h => h.id !== id);
     setMedicalHistory(newHistory);
-    localStorage.setItem('boat_medical_history', JSON.stringify(newHistory));
+    persistData('boat_medical_history', newHistory);
     triggerToast('ลบประวัติการตรวจสอบเวชภัณฑ์สำเร็จ', 'info');
   };
 
@@ -997,7 +1064,7 @@ export default function App() {
 
     const newHistory = [newRecord, ...licenseHistory];
     setLicenseHistory(newHistory);
-    localStorage.setItem('boat_license_history', JSON.stringify(newHistory));
+    persistData('boat_license_history', newHistory);
 
     const updatedLicenses = boatLicenses.map((b) => {
       if (b.boatId === recordData.boatId) {
@@ -1027,7 +1094,7 @@ export default function App() {
     });
 
     setBoatLicenses(updatedLicenses);
-    localStorage.setItem('boat_licenses', JSON.stringify(updatedLicenses));
+    persistData('boat_licenses', updatedLicenses);
 
     triggerToast(`บันทึกการส่งตรวจสอบใบอนุญาตของเรือ ${recordData.boatName} เสร็จสิ้น!`, 'success');
   };
@@ -1037,7 +1104,7 @@ export default function App() {
     if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบใบอนุญาตนี้ใช่หรือไม่?')) return;
     const newHistory = licenseHistory.filter(h => h.id !== id);
     setLicenseHistory(newHistory);
-    localStorage.setItem('boat_license_history', JSON.stringify(newHistory));
+    persistData('boat_license_history', newHistory);
     triggerToast('ลบประวัติการตรวจสอบใบอนุญาตสำเร็จ', 'info');
   };
 
@@ -1065,7 +1132,7 @@ export default function App() {
     }
 
     setLifeJacketHistory(updatedHistory);
-    localStorage.setItem('boat_life_jacket_history', JSON.stringify(updatedHistory));
+    persistData('boat_life_jacket_history', updatedHistory);
 
     const updatedJackets = lifeJackets.map((b) => {
       if (b.boatId === recordWithId.boatId) {
@@ -1090,7 +1157,7 @@ export default function App() {
     });
 
     setLifeJackets(updatedJackets);
-    localStorage.setItem('boat_life_jackets', JSON.stringify(updatedJackets));
+    persistData('boat_life_jackets', updatedJackets);
 
     triggerToast(`บันทึกการตรวจสอบเสื้อชูชีพของเรือ ${recordWithId.boatName} สำเร็จ!`, 'success');
   };
@@ -1100,7 +1167,7 @@ export default function App() {
     if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบเสื้อชูชีพนี้ใช่หรือไม่?')) return;
     const newHistory = lifeJacketHistory.filter(h => h.id !== id);
     setLifeJacketHistory(newHistory);
-    localStorage.setItem('boat_life_jacket_history', JSON.stringify(newHistory));
+    persistData('boat_life_jacket_history', newHistory);
     triggerToast('ลบประวัติการตรวจสอบเสื้อชูชีพสำเร็จ', 'info');
   };
 
@@ -1109,7 +1176,7 @@ export default function App() {
     if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบถังดับเพลิงนี้ใช่หรือไม่?')) return;
     const newHistory = history.filter(h => h.id !== id);
     setHistory(newHistory);
-    localStorage.setItem('boat_inspection_history', JSON.stringify(newHistory));
+    persistData('boat_inspection_history', newHistory);
     triggerToast('ลบประวัติการตรวจสอบถังดับเพลิงสำเร็จ', 'info');
   };
 
@@ -1143,7 +1210,7 @@ export default function App() {
 
     const updatedRecords = [newRecord, ...maintenanceRecords];
     setMaintenanceRecords(updatedRecords);
-    localStorage.setItem('boat_maintenance_history', JSON.stringify(updatedRecords));
+    persistData('boat_maintenance_history', updatedRecords);
 
     triggerToast(`บันทึกข้อมูลการซ่อมบำรุงเรือ ${recordData.boatName} สำเร็จ!`, 'success');
 
@@ -1169,7 +1236,7 @@ export default function App() {
   const handleDeleteMaintenanceRecord = (id: string) => {
     const updatedRecords = maintenanceRecords.filter((r) => r.id !== id);
     setMaintenanceRecords(updatedRecords);
-    localStorage.setItem('boat_maintenance_history', JSON.stringify(updatedRecords));
+    persistData('boat_maintenance_history', updatedRecords);
     triggerToast('ลบบันทึกประวัติการซ่อมบำรุงเรียบร้อยแล้ว', 'info');
 
     // Auto sync to connected Google Sheet if authenticated and configured
@@ -1194,7 +1261,7 @@ export default function App() {
       r.id === id ? { ...r, status: newStatus } : r
     );
     setMaintenanceRecords(updatedRecords);
-    localStorage.setItem('boat_maintenance_history', JSON.stringify(updatedRecords));
+    persistData('boat_maintenance_history', updatedRecords);
     triggerToast('อัปเดตสถานะการซ่อมบำรุงเรียบร้อยแล้ว', 'success');
 
     // Auto sync to connected Google Sheet if authenticated and configured
@@ -1218,7 +1285,7 @@ export default function App() {
   const handleClearHistory = (category: 'all' | 'extinguisher' | 'lifejacket' | 'license' | 'medical' = 'all') => {
     if (category === 'all' || category === 'extinguisher') {
       setHistory([]);
-      localStorage.setItem('boat_inspection_history', JSON.stringify([]));
+      persistData('boat_inspection_history', []);
       
       // Also reset all fire extinguisher check statuses back to "Never Inspected"
       const resetExts = extinguishers.map((e) => ({
@@ -1234,12 +1301,12 @@ export default function App() {
         remarks: '',
       }));
       setExtinguishers(resetExts);
-      localStorage.setItem('boat_fire_extinguishers', JSON.stringify(resetExts));
+      persistData('boat_fire_extinguishers', resetExts);
     }
 
     if (category === 'all' || category === 'lifejacket') {
       setLifeJacketHistory([]);
-      localStorage.setItem('boat_life_jacket_history', JSON.stringify([]));
+      persistData('boat_life_jacket_history', []);
       
       const resetLJs = lifeJackets.map((j) => ({
         ...j,
@@ -1254,12 +1321,12 @@ export default function App() {
         remarks: '',
       }));
       setLifeJackets(resetLJs);
-      localStorage.setItem('boat_life_jackets', JSON.stringify(resetLJs));
+      persistData('boat_life_jackets', resetLJs);
     }
 
     if (category === 'all' || category === 'license') {
       setLicenseHistory([]);
-      localStorage.setItem('boat_license_history', JSON.stringify([]));
+      persistData('boat_license_history', []);
       
       const resetLicenses = boatLicenses.map((l) => ({
         ...l,
@@ -1272,12 +1339,12 @@ export default function App() {
         remarks: '',
       }));
       setBoatLicenses(resetLicenses);
-      localStorage.setItem('boat_licenses', JSON.stringify(resetLicenses));
+      persistData('boat_licenses', resetLicenses);
     }
 
     if (category === 'all' || category === 'medical') {
       setMedicalHistory([]);
-      localStorage.setItem('boat_medical_history', JSON.stringify([]));
+      persistData('boat_medical_history', []);
       
       const resetMeds = medicalStations.map((s) => ({
         ...s,
@@ -1299,7 +1366,7 @@ export default function App() {
         remarks: '',
       }));
       setMedicalStations(resetMeds);
-      localStorage.setItem('boat_medical_stations', JSON.stringify(resetMeds));
+      persistData('boat_medical_stations', resetMeds);
     }
     
     triggerToast('ล้างประวัติเครื่องและการบันทึกในหมวดหมู่ที่เลือกเรียบร้อยแล้ว', 'info');
