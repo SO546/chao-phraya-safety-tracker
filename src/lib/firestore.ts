@@ -3,27 +3,48 @@
  * ใช้เป็นฐานข้อมูลกลางบนคลาวด์เพื่อ sync ข้อมูลข้ามเครื่อง
  */
 import { getApps, getApp, initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase (reuse existing app if already initialized from auth.ts)
-const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+let firebaseApp = getApps().length ? getApp() : null;
+if (!firebaseApp) {
+  try {
+    firebaseApp = initializeApp(firebaseConfig);
+    console.log('[Firebase] App initialized successfully');
+  } catch (error) {
+    console.error('[Firebase] Failed to initialize app:', error);
+    throw error;
+  }
+}
+
+// Initialize Firestore with error handling
+let db: ReturnType<typeof getFirestore>;
+try {
+  db = getFirestore(firebaseApp);
+  console.log('[Firebase] Firestore initialized successfully for project:', firebaseConfig.projectId);
+} catch (error) {
+  console.error('[Firebase] Failed to initialize Firestore:', error);
+  throw error;
+}
+
+// Export db for use in other components
+export { db };
 
 // Single shared document ID for all app data
 const SHARED_DOC_ID = 'shared_fleet_data';
 
-/** Whether Firestore is available (set to false on first failure to avoid repeated errors) */
-let firestoreAvailable = true;
+/** The last encountered Firestore error message, if any */
+let lastFirestoreError: string | null = null;
 
 /**
  * Helper to wrap a promise with a timeout.
  * Prevents hanging indefinitely if Firestore isn't created or network is down.
  */
-function withTimeout<T>(promise: Promise<T>, ms = 3000): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error('Firebase operation timeout (Firestore might not be initialized)'));
+      reject(new Error('Firebase operation timeout (Firestore might not be initialized or connection is slow)'));
     }, ms);
     promise.then(
       (res) => {
@@ -40,39 +61,32 @@ function withTimeout<T>(promise: Promise<T>, ms = 3000): Promise<T> {
 
 /**
  * Save data to Firestore under a specific key in the shared document.
- * Non-blocking — errors are logged but don't break the app.
+ * Non-blocking for auto-saves, but throws for manual saves.
  */
 export async function saveToCloud(key: string, data: any): Promise<void> {
-  if (!firestoreAvailable) return;
   try {
+    lastFirestoreError = null; // Clear previous error on retry
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
     await withTimeout(
       setDoc(docRef, { [key]: JSON.stringify(data), [`${key}_updatedAt`]: new Date().toISOString() }, { merge: true }),
-      3000
+      5000
     );
   } catch (error: any) {
-    console.warn(`[Firestore] saveToCloud("${key}") failed:`, error.message || error);
-    if (
-      error?.code === 'not-found' || 
-      error?.code === 'permission-denied' || 
-      error?.message?.includes('NOT_FOUND') ||
-      error?.message?.includes('timeout')
-    ) {
-      firestoreAvailable = false;
-      console.warn('[Firestore] Firestore appears to be unavailable. Cloud sync disabled for this session.');
-    }
+    const errMsg = error.message || String(error);
+    console.warn(`[Firestore] saveToCloud("${key}") failed:`, errMsg);
+    lastFirestoreError = errMsg;
+    throw error; // Propagate error so caller can toast or handle it
   }
 }
 
 /**
  * Load data from Firestore for a specific key.
- * Returns null if Firestore is unavailable or key doesn't exist.
  */
 export async function loadFromCloud<T = any>(key: string): Promise<T | null> {
-  if (!firestoreAvailable) return null;
   try {
+    lastFirestoreError = null;
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
-    const snapshot = await withTimeout(getDoc(docRef), 3000);
+    const snapshot = await withTimeout(getDoc(docRef), 5000);
     if (snapshot.exists()) {
       const raw = snapshot.data()[key];
       if (raw) {
@@ -81,17 +95,10 @@ export async function loadFromCloud<T = any>(key: string): Promise<T | null> {
     }
     return null;
   } catch (error: any) {
-    console.warn(`[Firestore] loadFromCloud("${key}") failed:`, error.message || error);
-    if (
-      error?.code === 'not-found' || 
-      error?.code === 'permission-denied' || 
-      error?.message?.includes('NOT_FOUND') ||
-      error?.message?.includes('timeout')
-    ) {
-      firestoreAvailable = false;
-      console.warn('[Firestore] Firestore appears to be unavailable. Cloud sync disabled for this session.');
-    }
-    return null;
+    const errMsg = error.message || String(error);
+    console.warn(`[Firestore] loadFromCloud("${key}") failed:`, errMsg);
+    lastFirestoreError = errMsg;
+    throw error;
   }
 }
 
@@ -99,12 +106,11 @@ export async function loadFromCloud<T = any>(key: string): Promise<T | null> {
  * Delete a key from the shared Firestore document.
  */
 export async function deleteFromCloud(key: string): Promise<void> {
-  if (!firestoreAvailable) return;
   try {
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
     await withTimeout(
       setDoc(docRef, { [key]: null, [`${key}_updatedAt`]: null }, { merge: true }),
-      3000
+      5000
     );
   } catch (error: any) {
     console.warn(`[Firestore] deleteFromCloud("${key}") failed:`, error.message || error);
@@ -113,13 +119,12 @@ export async function deleteFromCloud(key: string): Promise<void> {
 
 /**
  * Load ALL app data from Firestore in a single read.
- * More efficient than calling loadFromCloud for each key separately.
  */
 export async function loadAllFromCloud(): Promise<Record<string, any> | null> {
-  if (!firestoreAvailable) return null;
   try {
+    lastFirestoreError = null;
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
-    const snapshot = await withTimeout(getDoc(docRef), 3000);
+    const snapshot = await withTimeout(getDoc(docRef), 5000);
     if (snapshot.exists()) {
       const raw = snapshot.data();
       const result: Record<string, any> = {};
@@ -137,21 +142,19 @@ export async function loadAllFromCloud(): Promise<Record<string, any> | null> {
     }
     return null;
   } catch (error: any) {
-    console.warn('[Firestore] loadAllFromCloud() failed:', error.message || error);
-    if (
-      error?.code === 'not-found' || 
-      error?.code === 'permission-denied' || 
-      error?.message?.includes('NOT_FOUND') ||
-      error?.message?.includes('timeout') ||
-      error?.message?.includes('timeout')
-    ) {
-      firestoreAvailable = false;
-    }
-    return null;
+    const errMsg = error.message || String(error);
+    console.warn('[Firestore] loadAllFromCloud() failed:', errMsg);
+    lastFirestoreError = errMsg;
+    throw error;
   }
 }
 
-/** Check if Firestore cloud sync is available */
+/** Check if Firestore cloud sync has active errors */
+export function getFirestoreError(): string | null {
+  return lastFirestoreError;
+}
+
+/** Check if Firestore is configured and reachable */
 export function isCloudAvailable(): boolean {
-  return firestoreAvailable;
+  return lastFirestoreError === null;
 }

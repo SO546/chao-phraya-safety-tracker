@@ -1,13 +1,13 @@
-import React from 'react';
-import { 
-  ShieldCheck, 
-  AlertTriangle, 
-  Flame, 
-  ClipboardList, 
-  Clock, 
-  Ship as BoatIcon, 
-  LifeBuoy, 
-  HeartPulse, 
+import React, { useEffect, useState } from 'react';
+import {
+  ShieldCheck,
+  AlertTriangle,
+  Flame,
+  ClipboardList,
+  Clock,
+  Ship as BoatIcon,
+  LifeBuoy,
+  HeartPulse,
   FileText,
   ArrowRight,
   CheckCircle,
@@ -16,13 +16,16 @@ import {
   Shield,
   FileSpreadsheet
 } from 'lucide-react';
-import { 
-  Boat, 
-  FireExtinguisher, 
-  BoatLifeJacketState, 
-  BoatLicenseState, 
-  MedicalKitStation 
+import { db } from '../lib/firestore';
+import { collection, getDocs } from 'firebase/firestore';
+import {
+  Boat,
+  FireExtinguisher,
+  BoatLifeJacketState,
+  BoatLicenseState,
+  MedicalKitStation
 } from '../types';
+import BackupRestore from './BackupRestore';
 
 interface DashboardProps {
   extinguishers: FireExtinguisher[];
@@ -30,15 +33,18 @@ interface DashboardProps {
   onSelectBoat: (boatId: string) => void;
   onSelectExtinguisher: (ext: FireExtinguisher) => void;
   onOpenQuickScan: () => void;
-  
+
   // Complete inspection states for unified summary
   lifeJackets?: BoatLifeJacketState[];
   licenses?: BoatLicenseState[];
   medicalStations?: MedicalKitStation[];
-  
+
   // Callback to navigate to tabs or modules
   onNavigateTab?: (tab: 'dashboard' | 'boats' | 'lifejackets' | 'licenses' | 'history' | 'sheets') => void;
   onNavigateModule?: (module: 'security' | 'medical' | 'maintenance') => void;
+
+  // Callback for restore data
+  onRestoreData?: (data: any) => void;
 }
 
 export default function Dashboard({
@@ -52,6 +58,7 @@ export default function Dashboard({
   medicalStations = [],
   onNavigateTab,
   onNavigateModule,
+  onRestoreData,
 }: DashboardProps) {
   // Current month in YYYY-MM
   const currentMonthStr = new Date().toISOString().substring(0, 7); // "2026-06"
@@ -61,6 +68,28 @@ export default function Dashboard({
   ];
   const currentYearThai = new Date().getFullYear() + 543;
   const currentMonthThai = thaiMonths[new Date().getMonth()];
+
+  // Fetch data from Firebase 'safety' collection
+  const [safetyData, setSafetyData] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // ดึงข้อมูลจากคอลเล็กชันชื่อ "safety" ที่เราไปสร้างไว้ในระบบ
+        const querySnapshot = await getDocs(collection(db, 'safety'));
+        const data = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        setSafetyData(data);
+      } catch (error) {
+        console.error("เกิดข้อผิดพลาดในการดึงข้อมูล:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   // 1. --- CALCULATE FIRE EXTINGUISHER METRICS ---
   const totalExtCount = extinguishers.length;
@@ -753,6 +782,32 @@ export default function Dashboard({
               </div>
             )}
           </div>
+
+          {/* Firebase Safety Data Display */}
+          {safetyData.length > 0 && (
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <h4 className="text-sm font-bold text-blue-900 mb-3">ข้อมูลความปลอดภัยจาก Firebase</h4>
+              <div className="space-y-2">
+                {safetyData.map((item) => (
+                  <p key={item.id} className="text-xs text-blue-800">
+                    ข้อมูลความปลอดภัย: {item.safety || JSON.stringify(item)}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Backup & Restore Section */}
+          <BackupRestore
+            data={{
+              extinguishers,
+              boats,
+              lifeJackets,
+              licenses,
+              medicalStations
+            }}
+            onRestore={onRestoreData || (() => {})}
+          />
 
           <div className="pt-4 mt-6 border-t border-slate-100 bg-slate-950 text-white p-4 rounded-xl space-y-2">
             <div className="text-[9px] font-extrabold text-slate-400 block tracking-widest uppercase font-mono">ข้อกำหนดความปลอดภัยประจำวันเชิงปฏิบัติการ (Daily Routine Checklist)</div>
