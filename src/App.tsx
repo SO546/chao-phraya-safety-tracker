@@ -31,6 +31,7 @@ import {
   appendMedicalInspectionsToHistorySheet,
   syncMaintenanceToSheets
 } from './lib/sheets';
+import { uploadPhotoIfNeeded, uploadPhotosIfNeeded } from './lib/storage';
 
 import Dashboard from './components/Dashboard';
 import BoatList from './components/BoatList';
@@ -830,21 +831,22 @@ export default function App() {
   };
 
   // Inspect save logic
-  const handleSaveInspection = (recordData: Omit<InspectionRecord, 'id'>, updatedType?: ExtinguisherType, updatedSize?: string) => {
+  const handleSaveInspection = async (recordData: Omit<InspectionRecord, 'id'>, updatedType?: ExtinguisherType, updatedSize?: string) => {
     if (!inspectingExt) return;
 
-    // 1. Generate unique ID for historical logs
+    const newRecordId = `REC-${Date.now()}`;
+    const uploadedPhotoUrl = await uploadPhotoIfNeeded(recordData.photoUrl, 'inspection-photos', newRecordId);
+
     const newRecord: InspectionRecord = {
       ...recordData,
-      id: `REC-${Date.now()}`,
+      id: newRecordId,
+      photoUrl: uploadedPhotoUrl,
     };
 
-    // 2. Add to history array
     const newHistory = [newRecord, ...history];
     setHistory(newHistory);
     localStorage.setItem('boat_inspection_history', JSON.stringify(newHistory));
 
-    // 3. Update the fire extinguisher current status, including selectable type and size
     const updatedExts = extinguishers.map((e) => {
       if (e.id === inspectingExt.id) {
         return {
@@ -861,7 +863,7 @@ export default function App() {
           overallStatus: recordData.overallStatus,
           expiryDate: recordData.expiryDate,
           remarks: recordData.remarks,
-          lastPhotoUrl: recordData.photoUrl,
+          lastPhotoUrl: uploadedPhotoUrl,
         };
       }
       return e;
@@ -872,16 +874,10 @@ export default function App() {
 
     triggerToast(`บันทึกผลตรวจสอบถังดับเพลิง ${inspectingExt.id} เสร็จสิ้นแล้ว!`, 'success');
 
-    // 4. Auto sync to connected Google Sheet if authenticated and configured
     if (accessToken && sheetsConfig.spreadsheetId) {
-      // Run sync in the background so UI doesn't lag
       syncCurrentExtinguishersToSheets(accessToken, sheetsConfig.spreadsheetId, updatedExts)
+        .then(() => appendInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]))
         .then(() => {
-          // Then append this single new inspection to the sheets history
-          return appendInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]);
-        })
-        .then(() => {
-          // Update sync time
           const updatedConfig = {
             ...sheetsConfig,
             lastSyncedAt: new Date().toLocaleString('th-TH'),
@@ -900,19 +896,20 @@ export default function App() {
   };
 
   // Medical Inspection save logic
-  const handleSaveMedicalInspection = (recordData: Omit<MedicalInspectionRecord, 'id'>) => {
+  const handleSaveMedicalInspection = async (recordData: Omit<MedicalInspectionRecord, 'id'>) => {
     const newRecordId = `MEDREC-${Date.now()}`;
+    const uploadedPhotoUrl = await uploadPhotoIfNeeded(recordData.photoUrl, 'medical-photos', newRecordId);
+
     const newRecord: MedicalInspectionRecord = {
       ...recordData,
       id: newRecordId,
+      photoUrl: uploadedPhotoUrl,
     };
 
-    // Update History log list
     const newHistory = [newRecord, ...medicalHistory];
     setMedicalHistory(newHistory);
     localStorage.setItem('boat_medical_history', JSON.stringify(newHistory));
 
-    // Update individual station metrics
     const updatedStations = medicalStations.map((st) => {
       if (st.id === recordData.stationId) {
         return {
@@ -944,7 +941,7 @@ export default function App() {
           lastInspector: recordData.inspectorName,
           overallStatus: recordData.overallStatus === 'Pass' ? 'Pass' as any : 'Fail' as any,
           remarks: recordData.remarks,
-          lastPhotoUrl: recordData.photoUrl,
+          lastPhotoUrl: uploadedPhotoUrl,
         };
       }
       return st;
@@ -955,16 +952,10 @@ export default function App() {
 
     triggerToast(`บันทึกการตรวจเช็คเวชภัณฑ์สำหรับ ${recordData.targetName} เรียบร้อยแล้ว!`, 'success');
 
-    // 4. Auto sync to connected Google Sheet if authenticated and configured
     if (accessToken && sheetsConfig.spreadsheetId) {
-      // Run sync in the background so UI doesn't lag
       syncCurrentMedicalKitsToSheets(accessToken, sheetsConfig.spreadsheetId, updatedStations)
+        .then(() => appendMedicalInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]))
         .then(() => {
-          // Then append this single new inspection to the sheets history
-          return appendMedicalInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]);
-        })
-        .then(() => {
-          // Update sync time
           const updatedConfig = {
             ...sheetsConfig,
             lastSyncedAt: new Date().toLocaleString('th-TH'),
@@ -990,19 +981,24 @@ export default function App() {
   };
 
   // Boat License Inspection save logic
-  const handleSaveLicenseInspection = (recordData: Omit<LicenseInspectionRecord, 'id'>) => {
+  const handleSaveLicenseInspection = async (recordData: Omit<LicenseInspectionRecord, 'id'>) => {
     const newRecordId = `LICREC-${Date.now()}`;
+    const uploadedVesselPhotoUrl = await uploadPhotoIfNeeded(recordData.vesselPhotoUrl, 'license-photos', `${newRecordId}-vessel`);
+    const uploadedHelmsmanPhotoUrl = await uploadPhotoIfNeeded(recordData.helmsmanPhotoUrl, 'license-photos', `${newRecordId}-helmsman`);
+    const uploadedEngineerPhotoUrl = await uploadPhotoIfNeeded(recordData.engineerPhotoUrl, 'license-photos', `${newRecordId}-engineer`);
+
     const newRecord: LicenseInspectionRecord = {
       ...recordData,
       id: newRecordId,
+      vesselPhotoUrl: uploadedVesselPhotoUrl,
+      helmsmanPhotoUrl: uploadedHelmsmanPhotoUrl,
+      engineerPhotoUrl: uploadedEngineerPhotoUrl,
     };
 
-    // Update History log list
     const newHistory = [newRecord, ...licenseHistory];
     setLicenseHistory(newHistory);
     localStorage.setItem('boat_license_history', JSON.stringify(newHistory));
 
-    // Update individual boat licensing metrics
     const updatedLicenses = boatLicenses.map((b) => {
       if (b.boatId === recordData.boatId) {
         return {
@@ -1022,9 +1018,9 @@ export default function App() {
           lastInspector: recordData.inspectorName,
           overallStatus: recordData.overallStatus,
           remarks: recordData.remarks,
-          vesselPhotoUrl: recordData.vesselPhotoUrl,
-          helmsmanPhotoUrl: recordData.helmsmanPhotoUrl,
-          engineerPhotoUrl: recordData.engineerPhotoUrl,
+          vesselPhotoUrl: uploadedVesselPhotoUrl,
+          helmsmanPhotoUrl: uploadedHelmsmanPhotoUrl,
+          engineerPhotoUrl: uploadedEngineerPhotoUrl,
         };
       }
       return b;
@@ -1046,20 +1042,24 @@ export default function App() {
   };
 
   // Boat Life Jacket Inspection save logic
-  const handleSaveLifeJacketInspection = (recordData: LifeJacketInspectionRecord | Omit<LifeJacketInspectionRecord, 'id'>) => {
+  const handleSaveLifeJacketInspection = async (recordData: LifeJacketInspectionRecord | Omit<LifeJacketInspectionRecord, 'id'>) => {
     let updatedHistory = [...lifeJacketHistory];
     let recordWithId: LifeJacketInspectionRecord;
+    const isNewRecord = !('id' in recordData && recordData.id);
+    const recordId = isNewRecord ? `LJREC-${Date.now()}` : recordData.id;
+    const uploadedPhotoUrl = await uploadPhotoIfNeeded(recordData.photoUrl, 'lifejacket-photos', recordId);
 
     if ('id' in recordData && recordData.id) {
-      // Editing existing record
-      recordWithId = recordData as LifeJacketInspectionRecord;
+      recordWithId = {
+        ...(recordData as LifeJacketInspectionRecord),
+        photoUrl: uploadedPhotoUrl,
+      };
       updatedHistory = updatedHistory.map((rec) => rec.id === recordWithId.id ? recordWithId : rec);
     } else {
-      // New record
-      const newRecordId = `LJREC-${Date.now()}`;
       recordWithId = {
-        ...recordData,
-        id: newRecordId,
+        ...(recordData as Omit<LifeJacketInspectionRecord, 'id'>),
+        id: recordId,
+        photoUrl: uploadedPhotoUrl,
       } as LifeJacketInspectionRecord;
       updatedHistory = [recordWithId, ...updatedHistory];
     }
@@ -1067,7 +1067,6 @@ export default function App() {
     setLifeJacketHistory(updatedHistory);
     localStorage.setItem('boat_life_jacket_history', JSON.stringify(updatedHistory));
 
-    // Update individual boat life jacket state
     const updatedJackets = lifeJackets.map((b) => {
       if (b.boatId === recordWithId.boatId) {
         return {
@@ -1083,7 +1082,7 @@ export default function App() {
           lastInspector: recordWithId.inspectorName,
           overallStatus: recordWithId.overallStatus,
           remarks: recordWithId.remarks,
-          photoUrl: recordWithId.photoUrl,
+          photoUrl: uploadedPhotoUrl,
           seats: recordWithId.seats || b.seats,
         };
       }
@@ -1132,21 +1131,22 @@ export default function App() {
   };
 
   // Boat Maintenance save logic
-  const handleSaveMaintenanceRecord = (recordData: Omit<MaintenanceRecord, 'id'>) => {
+  const handleSaveMaintenanceRecord = async (recordData: Omit<MaintenanceRecord, 'id'>) => {
     const newRecordId = `MAINREC-${Date.now()}`;
+    const uploadedPhotos = await uploadPhotosIfNeeded(recordData.photos, 'maintenance-photos', newRecordId);
+
     const newRecord: MaintenanceRecord = {
       ...recordData,
       id: newRecordId,
+      photos: uploadedPhotos,
     };
 
-    // Update state
     const updatedRecords = [newRecord, ...maintenanceRecords];
     setMaintenanceRecords(updatedRecords);
     localStorage.setItem('boat_maintenance_history', JSON.stringify(updatedRecords));
 
     triggerToast(`บันทึกข้อมูลการซ่อมบำรุงเรือ ${recordData.boatName} สำเร็จ!`, 'success');
 
-    // Auto sync to connected Google Sheet if authenticated and configured
     if (accessToken && sheetsConfig.spreadsheetId) {
       syncMaintenanceToSheets(accessToken, sheetsConfig.spreadsheetId, updatedRecords)
         .then(() => {
