@@ -32,7 +32,7 @@ import {
   syncMaintenanceToSheets
 } from './lib/sheets';
 import { uploadPhotoIfNeeded, uploadPhotosIfNeeded } from './lib/storage';
-import { saveToCloud, loadAllFromCloud } from './lib/firestore';
+import { saveToCloud, loadAllFromCloud, isCloudAvailable } from './lib/firestore';
 
 import Dashboard from './components/Dashboard';
 import BoatList from './components/BoatList';
@@ -705,7 +705,31 @@ export default function App() {
     (async () => {
       try {
         const cloudData = await loadAllFromCloud();
-        if (cancelled || !cloudData) {
+        if (cancelled) return;
+
+        if (!cloudData || Object.keys(cloudData).length === 0) {
+          console.log('[CloudSync] Firestore is empty. Seeding with local localStorage data...');
+          const keys = [
+            'boat_fire_extinguishers',
+            'boat_inspection_history',
+            'boat_medical_stations',
+            'boat_medical_history',
+            'boat_licenses',
+            'boat_license_history',
+            'boat_life_jackets',
+            'boat_life_jacket_history',
+            'boat_maintenance_history'
+          ];
+          for (const key of keys) {
+            const localVal = localStorage.getItem(key);
+            if (localVal) {
+              try {
+                await saveToCloud(key, JSON.parse(localVal));
+              } catch (e) {
+                console.error(`[CloudSync] Auto-seed failed for ${key}:`, e);
+              }
+            }
+          }
           setIsCloudLoading(false);
           return;
         }
@@ -770,6 +794,88 @@ export default function App() {
   const persistData = (key: string, data: any) => {
     localStorage.setItem(key, JSON.stringify(data));
     saveToCloud(key, data).catch(() => {}); // fire-and-forget cloud save
+  };
+
+  const handlePushToCloud = async () => {
+    setIsSyncing(true);
+    try {
+      const dataToSave = {
+        'boat_fire_extinguishers': extinguishers,
+        'boat_inspection_history': history,
+        'boat_medical_stations': medicalStations,
+        'boat_medical_history': medicalHistory,
+        'boat_licenses': boatLicenses,
+        'boat_license_history': licenseHistory,
+        'boat_life_jackets': lifeJackets,
+        'boat_life_jacket_history': lifeJacketHistory,
+        'boat_maintenance_history': maintenanceRecords,
+      };
+
+      for (const [key, val] of Object.entries(dataToSave)) {
+        await saveToCloud(key, val);
+      }
+      triggerToast('ส่งข้อมูลของเครื่องนี้ขึ้นระบบคลาวด์สำเร็จแล้ว! ทุกเครื่องจะเห็นตรงกัน', 'success');
+    } catch (error: any) {
+      console.error(error);
+      triggerToast('ไม่สามารถส่งข้อมูลขึ้นคลาวด์ได้: กรุณาตรวจสอบการตั้งค่าฐานข้อมูล', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePullFromCloud = async () => {
+    setIsSyncing(true);
+    try {
+      const cloudData = await loadAllFromCloud();
+      if (!cloudData || Object.keys(cloudData).length === 0) {
+        triggerToast('ไม่พบข้อมูลบนระบบคลาวด์หรือฐานข้อมูลยังว่างอยู่', 'info');
+        return;
+      }
+
+      if (cloudData['boat_fire_extinguishers']) {
+        setExtinguishers(cloudData['boat_fire_extinguishers']);
+        localStorage.setItem('boat_fire_extinguishers', JSON.stringify(cloudData['boat_fire_extinguishers']));
+      }
+      if (cloudData['boat_inspection_history']) {
+        setHistory(cloudData['boat_inspection_history']);
+        localStorage.setItem('boat_inspection_history', JSON.stringify(cloudData['boat_inspection_history']));
+      }
+      if (cloudData['boat_medical_stations']) {
+        setMedicalStations(cloudData['boat_medical_stations']);
+        localStorage.setItem('boat_medical_stations', JSON.stringify(cloudData['boat_medical_stations']));
+      }
+      if (cloudData['boat_medical_history']) {
+        setMedicalHistory(cloudData['boat_medical_history']);
+        localStorage.setItem('boat_medical_history', JSON.stringify(cloudData['boat_medical_history']));
+      }
+      if (cloudData['boat_licenses']) {
+        setBoatLicenses(cloudData['boat_licenses']);
+        localStorage.setItem('boat_licenses', JSON.stringify(cloudData['boat_licenses']));
+      }
+      if (cloudData['boat_license_history']) {
+        setLicenseHistory(cloudData['boat_license_history']);
+        localStorage.setItem('boat_license_history', JSON.stringify(cloudData['boat_license_history']));
+      }
+      if (cloudData['boat_life_jackets']) {
+        setLifeJackets(cloudData['boat_life_jackets']);
+        localStorage.setItem('boat_life_jackets', JSON.stringify(cloudData['boat_life_jackets']));
+      }
+      if (cloudData['boat_life_jacket_history']) {
+        setLifeJacketHistory(cloudData['boat_life_jacket_history']);
+        localStorage.setItem('boat_life_jacket_history', JSON.stringify(cloudData['boat_life_jacket_history']));
+      }
+      if (cloudData['boat_maintenance_history']) {
+        setMaintenanceRecords(cloudData['boat_maintenance_history']);
+        localStorage.setItem('boat_maintenance_history', JSON.stringify(cloudData['boat_maintenance_history']));
+      }
+
+      triggerToast('ดึงข้อมูลล่าสุดจากระบบคลาวด์ลงเครื่องนี้เรียบร้อยแล้ว!', 'success');
+    } catch (error: any) {
+      console.error(error);
+      triggerToast('ไม่สามารถดึงข้อมูลได้: กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Google OAuth Login
@@ -1427,6 +1533,46 @@ export default function App() {
             }`}
           >
             🔧 ประวัติการซ่อมบำรุงเรือ (7 ลำ)
+          </button>
+        </div>
+      </div>
+
+      {/* Firebase Cloud Sync Control Bar */}
+      <div className="bg-slate-900 border-b border-slate-800 text-[11px] px-4 py-2 flex flex-col sm:flex-row justify-between items-center gap-2 select-none z-40 relative">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px]">☁️</span>
+          <span className="font-extrabold text-slate-300 font-mono">FIREBASE CLOUD DATABASE:</span>
+          {isCloudLoading ? (
+            <span className="text-amber-400 font-bold flex items-center gap-1.5">
+              <span className="animate-spin inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full"></span>
+              กำลังโหลดข้อมูลจากคลาวด์...
+            </span>
+          ) : isCloudAvailable() ? (
+            <span className="text-emerald-400 font-bold">
+              ● เชื่อมต่อระบบคลาวด์แล้ว (ข้อมูลทุกเครื่องเชื่อมโยงกันแบบ Real-time)
+            </span>
+          ) : (
+            <span className="text-red-400 font-bold">
+              ✕ ไม่พบฐานข้อมูลคลาวด์ (บันทึกข้อมูลเฉพาะเครื่องนี้ / กรุณาเปิดใช้ใน Firebase Console)
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePullFromCloud}
+            disabled={isCloudLoading || isSyncing}
+            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 px-2.5 py-1 rounded border border-slate-750 font-bold cursor-pointer transition-colors active:scale-95 text-[10px]"
+            title="ดึงข้อมูลจากระบบคลาวด์มาเขียนทับข้อมูลในเครื่องนี้"
+          >
+            🔄 ดึงข้อมูลคลาวด์มาลงเครื่องนี้ (Pull)
+          </button>
+          <button
+            onClick={handlePushToCloud}
+            disabled={isCloudLoading || isSyncing}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-1 rounded font-bold cursor-pointer transition-colors active:scale-95 text-[10px]"
+            title="ส่งข้อมูลทั้งหมดของเครื่องนี้ขึ้นไปเขียนทับบนคลาวด์"
+          >
+            📤 ส่งเครื่องนี้ขึ้นคลาวด์ (Push)
           </button>
         </div>
       </div>
