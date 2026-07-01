@@ -32,7 +32,7 @@ import {
   syncMaintenanceToSheets
 } from './lib/sheets';
 import { uploadPhotoIfNeeded, uploadPhotosIfNeeded } from './lib/storage';
-import { saveToCloud, loadAllFromCloud, isCloudAvailable } from './lib/firestore';
+import { saveToCloud, loadAllFromCloud, isCloudAvailable, getFirestoreError } from './lib/firestore';
 
 import Dashboard from './components/Dashboard';
 import BoatList from './components/BoatList';
@@ -1553,7 +1553,7 @@ export default function App() {
             </span>
           ) : (
             <span className="text-red-400 font-bold">
-              ✕ ไม่พบฐานข้อมูลคลาวด์ (บันทึกข้อมูลเฉพาะเครื่องนี้ / กรุณาเปิดใช้ใน Firebase Console)
+              ✕ ข้อผิดพลาดคลาวด์: {getFirestoreError()?.includes('permission-denied') ? 'การสิทธิ์ถูกปฏิเสธ (โปรดตั้งค่า Rules ใน Firebase เป็น true)' : getFirestoreError()?.includes('timeout') ? 'หมดเวลาการเชื่อมต่อ (โปรดเปิดใช้งาน Firestore database)' : getFirestoreError() || 'โปรดเปิดใช้งาน Firestore database ใน Firebase Console'}
             </span>
           )}
         </div>
