@@ -1713,6 +1713,13 @@ export default function App() {
                   onNavigateModule={(module) => {
                     setAppModule(module);
                   }}
+                  onRestoreData={(restoredData) => {
+                    if (restoredData.extinguishers) setExtinguishers(restoredData.extinguishers);
+                    if (restoredData.boats) setBoats(restoredData.boats);
+                    if (restoredData.lifeJackets) setLifeJackets(restoredData.lifeJackets);
+                    if (restoredData.licenses) setBoatLicenses(restoredData.licenses);
+                    if (restoredData.medicalStations) setMedicalStations(restoredData.medicalStations);
+                  }}
                 />
               )}
 
