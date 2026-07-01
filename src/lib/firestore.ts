@@ -17,6 +17,28 @@ const SHARED_DOC_ID = 'shared_fleet_data';
 let firestoreAvailable = true;
 
 /**
+ * Helper to wrap a promise with a timeout.
+ * Prevents hanging indefinitely if Firestore isn't created or network is down.
+ */
+function withTimeout<T>(promise: Promise<T>, ms = 3000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('Firebase operation timeout (Firestore might not be initialized)'));
+    }, ms);
+    promise.then(
+      (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+/**
  * Save data to Firestore under a specific key in the shared document.
  * Non-blocking — errors are logged but don't break the app.
  */
@@ -24,10 +46,18 @@ export async function saveToCloud(key: string, data: any): Promise<void> {
   if (!firestoreAvailable) return;
   try {
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
-    await setDoc(docRef, { [key]: JSON.stringify(data), [`${key}_updatedAt`]: new Date().toISOString() }, { merge: true });
+    await withTimeout(
+      setDoc(docRef, { [key]: JSON.stringify(data), [`${key}_updatedAt`]: new Date().toISOString() }, { merge: true }),
+      3000
+    );
   } catch (error: any) {
     console.warn(`[Firestore] saveToCloud("${key}") failed:`, error.message || error);
-    if (error?.code === 'not-found' || error?.code === 'permission-denied' || error?.message?.includes('NOT_FOUND')) {
+    if (
+      error?.code === 'not-found' || 
+      error?.code === 'permission-denied' || 
+      error?.message?.includes('NOT_FOUND') ||
+      error?.message?.includes('timeout')
+    ) {
       firestoreAvailable = false;
       console.warn('[Firestore] Firestore appears to be unavailable. Cloud sync disabled for this session.');
     }
@@ -42,7 +72,7 @@ export async function loadFromCloud<T = any>(key: string): Promise<T | null> {
   if (!firestoreAvailable) return null;
   try {
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
-    const snapshot = await getDoc(docRef);
+    const snapshot = await withTimeout(getDoc(docRef), 3000);
     if (snapshot.exists()) {
       const raw = snapshot.data()[key];
       if (raw) {
@@ -52,7 +82,12 @@ export async function loadFromCloud<T = any>(key: string): Promise<T | null> {
     return null;
   } catch (error: any) {
     console.warn(`[Firestore] loadFromCloud("${key}") failed:`, error.message || error);
-    if (error?.code === 'not-found' || error?.code === 'permission-denied' || error?.message?.includes('NOT_FOUND')) {
+    if (
+      error?.code === 'not-found' || 
+      error?.code === 'permission-denied' || 
+      error?.message?.includes('NOT_FOUND') ||
+      error?.message?.includes('timeout')
+    ) {
       firestoreAvailable = false;
       console.warn('[Firestore] Firestore appears to be unavailable. Cloud sync disabled for this session.');
     }
@@ -67,7 +102,10 @@ export async function deleteFromCloud(key: string): Promise<void> {
   if (!firestoreAvailable) return;
   try {
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
-    await setDoc(docRef, { [key]: null, [`${key}_updatedAt`]: null }, { merge: true });
+    await withTimeout(
+      setDoc(docRef, { [key]: null, [`${key}_updatedAt`]: null }, { merge: true }),
+      3000
+    );
   } catch (error: any) {
     console.warn(`[Firestore] deleteFromCloud("${key}") failed:`, error.message || error);
   }
@@ -81,7 +119,7 @@ export async function loadAllFromCloud(): Promise<Record<string, any> | null> {
   if (!firestoreAvailable) return null;
   try {
     const docRef = doc(db, 'app_data', SHARED_DOC_ID);
-    const snapshot = await getDoc(docRef);
+    const snapshot = await withTimeout(getDoc(docRef), 3000);
     if (snapshot.exists()) {
       const raw = snapshot.data();
       const result: Record<string, any> = {};
@@ -100,7 +138,13 @@ export async function loadAllFromCloud(): Promise<Record<string, any> | null> {
     return null;
   } catch (error: any) {
     console.warn('[Firestore] loadAllFromCloud() failed:', error.message || error);
-    if (error?.code === 'not-found' || error?.code === 'permission-denied' || error?.message?.includes('NOT_FOUND')) {
+    if (
+      error?.code === 'not-found' || 
+      error?.code === 'permission-denied' || 
+      error?.message?.includes('NOT_FOUND') ||
+      error?.message?.includes('timeout') ||
+      error?.message?.includes('timeout')
+    ) {
       firestoreAvailable = false;
     }
     return null;
