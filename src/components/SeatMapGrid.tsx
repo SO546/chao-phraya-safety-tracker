@@ -52,7 +52,7 @@ const ctbSeatGridMap: Record<string, { col: number; row: number }> = (() => {
     }
   }
 
-  // 2. Center side (Rows 3-6, Columns 5-14)
+  // 2. Center side (Rows 3-6, Columns 4-13)
   const centerSeats = [
     ['19D', '18D', '17D', '16D'],
     ['12D', '13D', '14D', '15D'],
@@ -68,7 +68,7 @@ const ctbSeatGridMap: Record<string, { col: number; row: number }> = (() => {
   for (let c = 0; c < 10; c++) {
     for (let r = 0; r < 4; r++) {
       if (centerSeats[c] && centerSeats[c][r]) {
-        map[centerSeats[c][r]] = { col: c + 5, row: r + 3 };
+        map[centerSeats[c][r]] = { col: c + 4, row: r + 3 };
       }
     }
   }
@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v1 positions so the new layout defaults show up automatically
+      // Clear old v2 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v2') {
+      if (version !== 'v3') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v2');
+        localStorage.setItem('boat_seat_positions_version', 'v3');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
@@ -263,7 +263,7 @@ export default function SeatMapGrid({
       const pos = rSeatGridMap[seatId];
       if (!pos) return { left: '0%', top: '0%' };
       const left = 18.0 + pos.col * ((72.0 - 18.0) / 20);
-      const topMap = [14.0, 21.0, 28.0, 55.0, 62.0, 69.0];
+      const topMap = [14.0, 21.0, 28.0, 35.0, 42.0, 49.0];
       const top = topMap[pos.row];
       return { left: `${left}%`, top: `${top}%` };
     }
