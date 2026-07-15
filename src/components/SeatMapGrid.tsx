@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v7 positions so the new layout defaults show up automatically
+      // Clear old v8 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v8') {
+      if (version !== 'v9') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v8');
+        localStorage.setItem('boat_seat_positions_version', 'v9');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
@@ -522,7 +522,7 @@ export default function SeatMapGrid({
                     onMouseDown={(e) => handleMouseDown(seat.id, e)}
                     onTouchStart={(e) => handleTouchStart(seat.id, e)}
                     style={getSeatCoords(seat.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center font-mono font-extrabold text-[7px] transition-all z-20 cursor-move hover:scale-130 active:scale-95 ${statusColor}`}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 ${seat.status === 'green' ? 'w-[26px] h-[26px]' : 'w-5 h-5'} rounded-full flex items-center justify-center font-mono font-extrabold text-[7px] transition-all z-20 cursor-move hover:scale-130 active:scale-95 ${statusColor}`}
                     title={`ที่นั่ง ${seat.id}: ${
                       seat.status === 'green' ? 'มีเสื้อชูชีพปกติ' : seat.status === 'red' ? 'ไม่มีเสื้อชูชีพ' : 'มีเสื้อชูชีพแต่ชำรุด/เก่า'
                     } (คลิกเพื่อเปลี่ยนสถานะ / ลากเพื่อจัดตำแหน่งได้)`}
