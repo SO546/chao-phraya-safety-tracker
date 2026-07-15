@@ -527,7 +527,26 @@ export default function SeatMapGrid({
                       seat.status === 'green' ? 'มีเสื้อชูชีพปกติ' : seat.status === 'red' ? 'ไม่มีเสื้อชูชีพ' : 'มีเสื้อชูชีพแต่ชำรุด/เก่า'
                     } (คลิกเพื่อเปลี่ยนสถานะ / ลากเพื่อจัดตำแหน่งได้)`}
                   >
-                    {seat.id}
+                    {seat.status === 'green' ? (
+                      <svg 
+                        viewBox="0 0 24 24" 
+                        width="11" 
+                        height="11" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="2.5" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                        className="w-[11px] h-[11px]"
+                      >
+                        <path d="M5 3h4v17H7a2 2 0 0 1-2-2V3z" />
+                        <path d="M19 3h-4v17h2a2 2 0 0 0 2-2V3z" />
+                        <path d="M9 8h6" />
+                        <path d="M9 13h6" />
+                      </svg>
+                    ) : (
+                      seat.id
+                    )}
                   </button>
                 );
               })}
