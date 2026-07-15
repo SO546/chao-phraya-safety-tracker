@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Ship as BoatIcon, ShieldCheck, Flame, AlertCircle, Sparkles, Clipboard, Search, CheckCircle2 } from 'lucide-react';
 import { Boat, FireExtinguisher } from '../types';
-import BoatMap from './BoatMap';
 
 interface BoatListProps {
   selectedBoatId: string | null;
@@ -38,19 +37,19 @@ export default function BoatList({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Pass':
-        return <span className="bg-green-150 text-green-800 border border-green-300 text-[10px] font-bold font-mono px-2 py-0.5 rounded-sm uppercase">ผ่านเกณฑ์ (Pass)</span>;
+        return <span className="bg-green-100 text-green-900 border border-green-400 text-[10px] font-black font-mono px-2 py-0.5 rounded-sm uppercase">ผ่านเกณฑ์ (Pass)</span>;
       case 'Fail':
-        return <span className="bg-red-150 text-red-800 border border-red-300 text-[10px] font-bold font-mono px-2 py-0.5 rounded-sm uppercase animate-pulse">ชำรุด (Defective)</span>;
+        return <span className="bg-red-100 text-red-900 border border-red-400 text-[10px] font-black font-mono px-2 py-0.5 rounded-sm uppercase animate-pulse">ชำรุด (Fail)</span>;
       default:
-        return <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold font-mono px-2 py-0.5 rounded-sm uppercase">ค้างตรวจ (Pending)</span>;
+        return <span className="bg-amber-100 text-amber-900 border border-amber-400 text-[10px] font-black font-mono px-2 py-0.5 rounded-sm uppercase">ค้างตรวจ (Pending)</span>;
     }
   };
 
   const getDetailStatusIndicator = (label: string, value: string, isOk: boolean) => {
     return (
-      <div className="flex justify-between items-center bg-white p-2 rounded-sm border border-slate-200 text-[11px]">
-        <span className="text-slate-500 font-medium">{label}</span>
-        <span className={`font-bold font-mono ${isOk ? 'text-green-700' : 'text-red-650 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-xs'}`}>
+      <div className="flex justify-between items-center bg-white p-2 rounded-sm border border-slate-300 text-[11px]">
+        <span className="text-slate-700 font-bold">{label}</span>
+        <span className={`font-black font-mono ${isOk ? 'text-green-800' : 'text-red-700 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded-xs shadow-sm'}`}>
           {value}
         </span>
       </div>
@@ -70,12 +69,12 @@ export default function BoatList({
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b-2 border-slate-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b-2 border-slate-300">
         <div className="flex items-center gap-3">
           {selectedBoatId && (
             <button
               onClick={() => onSelectBoat(null)}
-              className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded transition-all shadow-sm cursor-pointer"
+              className="p-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded transition-all shadow-sm cursor-pointer"
               title="ย้อนกลับ"
               id="back-btn-boatlist"
             >
@@ -83,7 +82,7 @@ export default function BoatList({
             </button>
           )}
           <div>
-            <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
+            <h2 className="text-xl font-bold text-slate-950 uppercase tracking-tight">
               {selectedBoat ? `รายการถังดับเพลิง: ${selectedBoat.name}` : 'สารบบถังดับเพลิงเรือท่องเที่ยวทั้งหมด'}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -96,67 +95,49 @@ export default function BoatList({
 
         {/* Search */}
         <div className="relative w-full md:w-80">
-          <input
-            type="text"
+          <input type="text"
             placeholder="ค้นหา เลขถัง, สถานที่ตั้ง, ชื่อเรือ..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white text-slate-800 text-xs border border-slate-250 rounded px-4 py-2.5 pl-10 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 font-medium"
+            className="w-full bg-white text-slate-950 text-xs border border-slate-250 rounded px-4 py-2.5 pl-10 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 font-medium"
           />
-          <Search className="absolute left-3.5 top-3.5 text-slate-400 h-4 w-4" />
+          <Search className="absolute left-3.5 top-3.5 text-slate-500 h-4 w-4" />
         </div>
       </div>
 
-      {/* Boat selection pills if in overall mode */}
-      {!selectedBoatId && (
-        <div className="flex flex-wrap gap-1.5 pb-1">
+      {/* Boat selection pills */}
+      <div className="flex flex-wrap gap-1.5 pb-1">
+        <button
+          onClick={() => onSelectBoat(null)}
+          className={`px-3.5 py-1.5 text-xs font-bold rounded border uppercase font-mono shadow-sm transition-all cursor-pointer ${
+            selectedBoatId === null
+              ? 'bg-white text-slate-950 border-slate-950 font-extrabold'
+              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          เรือทุกลำ (All Ships)
+        </button>
+        {boats.map((b) => (
           <button
-            onClick={() => onSelectBoat(null)}
+            key={b.id}
+            onClick={() => onSelectBoat(b.id)}
             className={`px-3.5 py-1.5 text-xs font-bold rounded border uppercase font-mono shadow-sm transition-all cursor-pointer ${
-              selectedBoatId === null
-                ? 'bg-slate-900 text-white border-slate-950 font-extrabold'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              selectedBoatId === b.id
+                ? 'bg-red-600 text-white border-red-700 font-extrabold'
+                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
             }`}
           >
-            เรือทุกลำ (All Ships)
+            {b.name} ({b.totalExtinguishers} ถัง)
           </button>
-          {boats.map((b) => (
-            <button
-              key={b.id}
-              onClick={() => onSelectBoat(b.id)}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded border uppercase font-mono shadow-sm transition-all cursor-pointer ${
-                selectedBoatId === b.id
-                  ? 'bg-red-600 text-white border-red-700 font-extrabold'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {b.name} ({b.totalExtinguishers} ถัง)
-            </button>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
 
       {/* Grid of fire extinguisher cards */}
-      {selectedBoat ? (
-        <BoatMap 
-          boat={selectedBoat}
-          extinguishers={extinguishers}
-          onInspectExtinguisher={onInspectExtinguisher}
-        />
-      ) : (
-        <div className="bg-slate-50 border border-slate-250 rounded p-4 text-xs text-slate-600 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
-            <span className="leading-relaxed">💡 <strong>คำแนะนำเพิ่มเติม:</strong> เลือกกดปุ่มแท็บรายชื่อเรือ (เช่น <strong>CTB1, CTB2, R1</strong>) ในแถบเมนูด้านบนเพื่อเปิดดู <strong>แผนผังจุดติดตั้งแบบไดนามิกประจำตำแหน่งเรือ (Interactive Deck Blueprint)</strong> ได้ทันที</span>
-          </div>
-        </div>
-      )}
-
       {filteredExtinguishers.length === 0 ? (
         <div className="py-20 text-center bg-white border border-dashed border-slate-350 rounded flex flex-col items-center justify-center space-y-3">
-          <AlertCircle className="h-8 w-8 text-slate-400" />
+          <AlertCircle className="h-8 w-8 text-slate-500" />
           <div className="text-sm font-bold text-slate-600 uppercase tracking-wider">ไม่พบถังดับเพลิงที่ตรงเงื่อนไขการค้นหา</div>
-          <div className="text-xs text-slate-400">กรุณาลองปรับข้อความค้นหานามสลักใหม่อีกครั้ง</div>
+          <div className="text-xs text-slate-500">กรุณาลองปรับข้อความค้นหานามสลักใหม่อีกครั้ง</div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -182,16 +163,16 @@ export default function BoatList({
                   <div className="flex justify-between items-start gap-2">
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-extrabold text-blue-850 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-sm font-mono leading-none">
+                        <span className="text-[10px] font-black text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-sm font-mono leading-none">
                           {e.id}
                         </span>
                         {!selectedBoatId && (
-                          <span className="text-[10px] font-bold text-slate-500 truncate max-w-[110px] uppercase tracking-wider font-mono" title={e.boatName}>
+                          <span className="text-[10px] font-black text-slate-700 truncate max-w-[110px] uppercase tracking-wider font-mono" title={e.boatName}>
                             {e.boatName}
                           </span>
                         )}
                       </div>
-                      <h3 className="font-bold text-slate-900 text-sm leading-snug pt-1">
+                      <h3 className="font-bold text-slate-950 text-sm leading-snug pt-1">
                         {e.location}
                       </h3>
                     </div>
@@ -199,22 +180,22 @@ export default function BoatList({
                   </div>
 
                   {/* General spec information */}
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-slate-100 border border-slate-200 rounded text-xs font-mono">
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-white border border-slate-300 rounded text-xs font-mono">
                     <div>
-                      <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">ชนิดถัง</span>
-                      <span className="font-bold text-slate-800 block mt-0.5 truncate" title={mapTypeToThai(e.type)}>
+                      <span className="text-slate-700 block text-[9px] uppercase font-black tracking-wider">ชนิดถัง</span>
+                      <span className="font-black text-slate-950 block mt-0.5 truncate" title={mapTypeToThai(e.type)}>
                         {mapTypeToThai(e.type)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">ขนาดบรรจุ</span>
-                      <span className="font-bold text-slate-800 block mt-0.5">{e.size}</span>
+                      <span className="text-slate-700 block text-[9px] uppercase font-black tracking-wider">ขนาดบรรจุ</span>
+                      <span className="font-black text-slate-950 block mt-0.5">{e.size}</span>
                     </div>
                   </div>
 
                   {/* Detail statuses of individual indicators */}
                   <div className="space-y-1.5">
-                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">รายละเอียดเกณฑ์การตรวจประจำงวด</div>
+                    <div className="text-[9px] font-black text-slate-700 uppercase tracking-widest">รายละเอียดเกณฑ์การตรวจประจำงวด</div>
                     
                     {getDetailStatusIndicator(
                       '• เกจวัดแรงดัน (Pressure)',
@@ -249,18 +230,18 @@ export default function BoatList({
                 </div>
 
                 {/* Footer buttons / last check indicators */}
-                <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex flex-col gap-3">
-                  <div className="flex justify-between items-center text-xs text-slate-500">
+                <div className="px-5 py-4 bg-white border-t border-slate-300 flex flex-col gap-3">
+                  <div className="flex justify-between items-center text-xs text-slate-700 font-bold">
                     <div>
-                      <span className="block text-[9px] text-slate-400 uppercase font-bold tracking-wider">วันที่ตรวจล่าสุด</span>
-                      <span className="font-bold text-slate-800 font-mono">
+                      <span className="block text-[9px] text-slate-700 uppercase font-black tracking-wider">วันที่ตรวจล่าสุด</span>
+                      <span className="font-black text-slate-950 font-mono">
                         {e.lastInspectedDate || 'NEVER AUDITED'}
                       </span>
                     </div>
                     {e.lastInspector && (
                       <div className="text-right">
-                        <span className="block text-[9px] text-slate-400 uppercase font-bold tracking-wider">เจ้าหน้าที่ตรวจ</span>
-                        <span className="font-bold text-slate-700">
+                        <span className="block text-[9px] text-slate-700 uppercase font-black tracking-wider">เจ้าหน้าที่ตรวจ</span>
+                        <span className="font-black text-slate-950">
                           {e.lastInspector}
                         </span>
                       </div>
@@ -278,7 +259,7 @@ export default function BoatList({
                     className={`w-full py-2 px-4 rounded text-xs font-bold transition-all flex items-center justify-center gap-2 border cursor-pointer uppercase font-mono shadow-sm ${
                       hasBeenCheckedThisMonth
                         ? 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100'
-                        : 'bg-slate-900 text-white border-slate-950 hover:bg-slate-950 shadow-xs'
+                        : 'bg-white text-slate-950 border-slate-950 hover:bg-slate-50 shadow-xs'
                     }`}
                   >
                     <Clipboard className="h-3.5 w-3.5" />

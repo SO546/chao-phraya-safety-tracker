@@ -1,10 +1,9 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { initializeAuth, inMemoryPersistence, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-// Initialize Firebase App (reuse existing app if already initialized)
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-console.log('[Firebase Auth] Using Firebase app for project:', firebaseConfig.projectId);
+// Initialize Firebase App
+const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Auth with in-memory persistence to prevent security sandbox crashes inside Apps Script
 export const auth = initializeAuth(app, {

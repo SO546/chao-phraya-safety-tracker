@@ -4,18 +4,39 @@
 @theme {
   --font-sans: "Inter", "Sarabun", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --radius-sm: 1px;
-  --radius-md: 2px;
-  --radius-lg: 3px;
-  --radius-xl: 4px;
-  --radius-2xl: 6px;
-  --radius-3xl: 8px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #f1f5f9; /* Slate 100 for higher contrast */
-  color: #0f172a; /* Slate 900 */
+  background-color: #ffffff; /* White */
+  color: #020617; /* Slate 900 */
+}
+
+/* Ensure light backgrounds have dark text */
+.bg-white, .bg-slate-50, .bg-slate-100 {
+  color: #020617; /* Slate 900 */
+}
+
+/* Custom scrollbar for better visibility on light backgrounds */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Modal and layout fade-in transition tricks */
@@ -34,3 +55,9 @@ body {
   animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+
+/* Force light background on inputs */
+input, select, textarea {
+  background-color: #ffffff;
+  color: #020617;
+}

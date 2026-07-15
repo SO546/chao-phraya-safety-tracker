@@ -50,6 +50,7 @@ export interface InspectionRecord {
   overallStatus: 'Pass' | 'Fail';
   remarks: string;
   photoUrl?: string; // Base64 or image url
+  rectificationPhotoUrl?: string; // รูปภาพแนบสำหรับการแก้ไขแล้ว
 }
 
 export interface SheetsConfig {
@@ -141,6 +142,7 @@ export interface MedicalInspectionRecord {
   overallStatus: 'Pass' | 'Fail';
   remarks: string;
   photoUrl?: string; // photo attached
+  rectificationPhotoUrl?: string; // รูปภาพแนบสำหรับการแก้ไขแล้ว
 }
 
 // --- Vessel Crew & Boat Licenses ---
@@ -208,6 +210,7 @@ export interface LicenseInspectionRecord {
   vesselPhotoUrl?: string;
   helmsmanPhotoUrl?: string;
   engineerPhotoUrl?: string;
+  rectificationPhotoUrl?: string; // รูปภาพแนบสำหรับการแก้ไขแล้ว
 }
 
 // --- Boat Maintenance Logs ---
@@ -226,6 +229,7 @@ export interface MaintenanceRecord {
   status: MaintenanceStatus;
   photos: string[]; // array of base64 images or urls
   partRepaired?: string; // name of the repaired component/device, e.g. "เครื่องปรับอากาศ", "ไดชาร์จ", "ยอย", "แท่นเครื่อง"
+  cost?: number; // maintenance cost in THB
 }
 
 // --- Boat Life Jackets (เสื้อชูชีพภายในเรือ) ---
@@ -271,6 +275,7 @@ export interface LifeJacketInspectionRecord {
   remarks: string;
   photoUrl?: string;
   seats?: BoatSeatLifeJacket[]; // แผนผังที่นั่งเสื้อชูชีพตอนตรวจสอบ
+  rectificationPhotoUrl?: string; // รูปภาพแนบสำหรับการแก้ไขแล้ว
 }
 
 

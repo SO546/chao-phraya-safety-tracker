@@ -15,7 +15,10 @@ import {
   RefreshCw,
   Bell,
   HeartPulse,
-  LifeBuoy
+  LifeBuoy,
+  Map as MapIcon,
+  Grid,
+  Trash2
 } from 'lucide-react';
 
 import { Boat, FireExtinguisher, InspectionRecord, SheetsConfig, ExtinguisherType, MedicalKitStation, MedicalInspectionRecord, BoatLicenseState, LicenseInspectionRecord, MaintenanceRecord, BoatLifeJacketState, LifeJacketInspectionRecord, MaintenanceStatus } from './types';
@@ -31,8 +34,6 @@ import {
   appendMedicalInspectionsToHistorySheet,
   syncMaintenanceToSheets
 } from './lib/sheets';
-import { uploadPhotoIfNeeded, uploadPhotosIfNeeded } from './lib/storage';
-import { saveToCloud, loadAllFromCloud, isCloudAvailable, getFirestoreError } from './lib/firestore';
 
 import Dashboard from './components/Dashboard';
 import BoatList from './components/BoatList';
@@ -42,16 +43,174 @@ import MedicalSection from './components/MedicalSection';
 import LicenseSection from './components/LicenseSection';
 import MaintenanceSection from './components/MaintenanceSection';
 import LifeJacketSection from './components/LifeJacketSection';
+import ExtinguisherReport from './components/ExtinguisherReport';
+import ExecutiveSummaryReport from './components/ExecutiveSummaryReport';
 
 // Safe local storage proxy for sandboxed environments like Google Apps Script
 const localStorage = (() => {
+  const memoryStorage = new Map<string, string>();
+
+  const safeSetItem = (key: string, value: string) => {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error: any) {
+      console.warn(`Local storage write failed for key "${key}". Attempting to clear space...`, error);
+
+      // Check if it is a QuotaExceededError or SecurityError
+      const isQuotaError = 
+        error.name === 'QuotaExceededError' ||
+        error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        error.code === 22 ||
+        String(error).toLowerCase().includes('quota') ||
+        String(error).toLowerCase().includes('exceeded') ||
+        String(error).toLowerCase().includes('security') ||
+        String(error).toLowerCase().includes('denied');
+
+      if (isQuotaError) {
+        try {
+          const historyKeys = [
+            'boat_inspection_history',
+            'boat_medical_history',
+            'boat_life_jacket_history',
+            'boat_license_history',
+            'boat_maintenance_history'
+          ];
+
+          let freedSomeSpace = false;
+
+          for (const histKey of historyKeys) {
+            const raw = window.localStorage.getItem(histKey);
+            if (raw) {
+              try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  let cleaned = false;
+                  const updated = parsed.map((item: any, idx: number) => {
+                    // Keep photos only for the 2 most recent records, strip for older records to save space
+                    if (idx > 1) {
+                      if (item.photoUrl || item.lastPhotoUrl || item.vesselPhotoUrl || item.helmsmanPhotoUrl || item.engineerPhotoUrl) {
+                        cleaned = true;
+                        return {
+                          ...item,
+                          photoUrl: undefined,
+                          lastPhotoUrl: undefined,
+                          vesselPhotoUrl: undefined,
+                          helmsmanPhotoUrl: undefined,
+                          engineerPhotoUrl: undefined
+                        };
+                      }
+                    }
+                    return item;
+                  });
+
+                  if (cleaned) {
+                    try {
+                      window.localStorage.setItem(histKey, JSON.stringify(updated));
+                      freedSomeSpace = true;
+                    } catch (errInnerWrite) {
+                      console.warn(`Could not overwrite ${histKey} during cleanup`, errInnerWrite);
+                    }
+                  }
+                }
+              } catch (innerErr) {
+                // Ignore parsing errors
+              }
+            }
+          }
+
+          // Also try to strip old photos in the value currently being saved if it is a history key or lists
+          let currentValueToSave = value;
+          if (key.includes('history') || key.includes('stations') || key.includes('licenses') || key.includes('extinguishers') || key.includes('jackets')) {
+            try {
+              const parsedValue = JSON.parse(value);
+              if (Array.isArray(parsedValue)) {
+                let cleanedCurrent = false;
+                const strippedValue = parsedValue.map((item: any, idx: number) => {
+                  if (idx > 1) { // Only keep photos for the first 2 items
+                    if (item.photoUrl || item.lastPhotoUrl || item.vesselPhotoUrl || item.helmsmanPhotoUrl || item.engineerPhotoUrl) {
+                      cleanedCurrent = true;
+                      return {
+                        ...item,
+                        photoUrl: undefined,
+                        lastPhotoUrl: undefined,
+                        vesselPhotoUrl: undefined,
+                        helmsmanPhotoUrl: undefined,
+                        engineerPhotoUrl: undefined
+                      };
+                    }
+                  }
+                  return item;
+                });
+                if (cleanedCurrent) {
+                  currentValueToSave = JSON.stringify(strippedValue);
+                }
+              }
+            } catch (stripErr) {
+              // Ignore
+            }
+          }
+
+          // Try saving the original or stripped value again now that we freed some space
+          try {
+            window.localStorage.setItem(key, currentValueToSave);
+            console.log(`Saved key "${key}" successfully after clearing space.`);
+            return;
+          } catch (retryWriteError) {
+            console.warn('Fallback: saving value with stripped photos failed, falling back to memory storage', retryWriteError);
+          }
+        } catch (retryError) {
+          console.error('Failed to save to window.localStorage even after space clearing:', retryError);
+        }
+      }
+
+      // Fallback: If we can't write to window.localStorage, save to memory storage
+      // so the app state remains functional during the session
+      memoryStorage.set(key, value);
+    }
+  };
+
   try {
     const testKey = '__test';
     window.localStorage.setItem(testKey, '1');
     window.localStorage.removeItem(testKey);
-    return window.localStorage;
+
+    return {
+      getItem: (key: string) => {
+        try {
+          return window.localStorage.getItem(key) || memoryStorage.get(key) || null;
+        } catch (e) {
+          return memoryStorage.get(key) || null;
+        }
+      },
+      setItem: safeSetItem,
+      removeItem: (key: string) => {
+        try {
+          window.localStorage.removeItem(key);
+        } catch (e) {}
+        memoryStorage.delete(key);
+      },
+      clear: () => {
+        try {
+          window.localStorage.clear();
+        } catch (e) {}
+        memoryStorage.clear();
+      },
+      get length() {
+        try {
+          return window.localStorage.length + memoryStorage.size;
+        } catch (e) {
+          return memoryStorage.size;
+        }
+      },
+      key: (index: number) => {
+        try {
+          return window.localStorage.key(index) || Array.from(memoryStorage.keys())[index] || null;
+        } catch (e) {
+          return Array.from(memoryStorage.keys())[index] || null;
+        }
+      }
+    };
   } catch (e) {
-    const memoryStorage = new Map<string, string>();
     return {
       getItem: (key: string) => memoryStorage.get(key) || null,
       setItem: (key: string, value: string) => { memoryStorage.set(key, String(value)); },
@@ -64,8 +223,9 @@ const localStorage = (() => {
 })();
 
 export default function App() {
-  const [appModule, setAppModule] = useState<'security' | 'medical' | 'maintenance'>('security');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'boats' | 'lifejackets' | 'licenses' | 'history'>('dashboard');
+  const [mainTab, setMainTab] = useState<'dashboard' | 'forms'>('dashboard');
+  const [dashboardSubTab, setDashboardSubTab] = useState<'security' | 'vessel-summary' | 'medical' | 'maintenance' | 'extinguisher-map' | 'lifejacket-map' | 'executive-report'>('security');
+  const [formsSubTab, setFormsSubTab] = useState<'extinguishers' | 'lifejackets' | 'licenses' | 'medical' | 'maintenance' | 'history' | 'extinguisher-report'>('extinguishers');
   const [boats, setBoats] = useState<Boat[]>(BOATS);
   const [extinguishers, setExtinguishers] = useState<FireExtinguisher[]>([]);
   const [history, setHistory] = useState<InspectionRecord[]>([]);
@@ -98,11 +258,18 @@ export default function App() {
   // Loading States
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
-  const [isCloudLoading, setIsCloudLoading] = useState(true);
   
   // Inspection Modal State
   const [inspectingExt, setInspectingExt] = useState<FireExtinguisher | null>(null);
   const [selectedBoatId, setSelectedBoatId] = useState<string | null>(null);
+
+  // Custom Confirmation Dialog State
+  const [confirmDelete, setConfirmDelete] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // App notification
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -699,183 +866,12 @@ export default function App() {
     }
   }, []);
 
-  // ======== Cloud Sync: Load from Firestore on mount ========
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const cloudData = await loadAllFromCloud();
-        if (cancelled) return;
-
-        if (!cloudData || Object.keys(cloudData).length === 0) {
-          console.log('[CloudSync] Firestore is empty. Seeding with local localStorage data...');
-          const keys = [
-            'boat_fire_extinguishers',
-            'boat_inspection_history',
-            'boat_medical_stations',
-            'boat_medical_history',
-            'boat_licenses',
-            'boat_license_history',
-            'boat_life_jackets',
-            'boat_life_jacket_history',
-            'boat_maintenance_history'
-          ];
-          for (const key of keys) {
-            const localVal = localStorage.getItem(key);
-            if (localVal) {
-              try {
-                await saveToCloud(key, JSON.parse(localVal));
-              } catch (e) {
-                console.error(`[CloudSync] Auto-seed failed for ${key}:`, e);
-              }
-            }
-          }
-          setIsCloudLoading(false);
-          return;
-        }
-
-        // Only override if cloud has actual data for each key
-        if (cloudData['boat_fire_extinguishers'] && Array.isArray(cloudData['boat_fire_extinguishers']) && cloudData['boat_fire_extinguishers'].length > 0) {
-          setExtinguishers(cloudData['boat_fire_extinguishers']);
-          localStorage.setItem('boat_fire_extinguishers', JSON.stringify(cloudData['boat_fire_extinguishers']));
-        }
-        if (cloudData['boat_inspection_history'] && Array.isArray(cloudData['boat_inspection_history'])) {
-          setHistory(cloudData['boat_inspection_history']);
-          localStorage.setItem('boat_inspection_history', JSON.stringify(cloudData['boat_inspection_history']));
-        }
-        if (cloudData['boat_medical_stations'] && Array.isArray(cloudData['boat_medical_stations']) && cloudData['boat_medical_stations'].length > 0) {
-          setMedicalStations(cloudData['boat_medical_stations']);
-          localStorage.setItem('boat_medical_stations', JSON.stringify(cloudData['boat_medical_stations']));
-        }
-        if (cloudData['boat_medical_history'] && Array.isArray(cloudData['boat_medical_history'])) {
-          setMedicalHistory(cloudData['boat_medical_history']);
-          localStorage.setItem('boat_medical_history', JSON.stringify(cloudData['boat_medical_history']));
-        }
-        if (cloudData['boat_licenses'] && Array.isArray(cloudData['boat_licenses']) && cloudData['boat_licenses'].length > 0) {
-          setBoatLicenses(cloudData['boat_licenses']);
-          localStorage.setItem('boat_licenses', JSON.stringify(cloudData['boat_licenses']));
-        }
-        if (cloudData['boat_license_history'] && Array.isArray(cloudData['boat_license_history'])) {
-          setLicenseHistory(cloudData['boat_license_history']);
-          localStorage.setItem('boat_license_history', JSON.stringify(cloudData['boat_license_history']));
-        }
-        if (cloudData['boat_life_jackets'] && Array.isArray(cloudData['boat_life_jackets']) && cloudData['boat_life_jackets'].length > 0) {
-          setLifeJackets(cloudData['boat_life_jackets']);
-          localStorage.setItem('boat_life_jackets', JSON.stringify(cloudData['boat_life_jackets']));
-        }
-        if (cloudData['boat_life_jacket_history'] && Array.isArray(cloudData['boat_life_jacket_history'])) {
-          setLifeJacketHistory(cloudData['boat_life_jacket_history']);
-          localStorage.setItem('boat_life_jacket_history', JSON.stringify(cloudData['boat_life_jacket_history']));
-        }
-        if (cloudData['boat_maintenance_history'] && Array.isArray(cloudData['boat_maintenance_history']) && cloudData['boat_maintenance_history'].length > 0) {
-          setMaintenanceRecords(cloudData['boat_maintenance_history']);
-          localStorage.setItem('boat_maintenance_history', JSON.stringify(cloudData['boat_maintenance_history']));
-        }
-
-        console.log('[CloudSync] Successfully loaded data from Firestore');
-      } catch (err) {
-        console.warn('[CloudSync] Failed to load from cloud, using localStorage:', err);
-      } finally {
-        if (!cancelled) setIsCloudLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
   // Show dynamic notification helper
   const triggerToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
     }, 5000);
-  };
-
-  // ======== Persist data to both localStorage AND Firestore ========
-  const persistData = (key: string, data: any) => {
-    localStorage.setItem(key, JSON.stringify(data));
-    saveToCloud(key, data).catch(() => {}); // fire-and-forget cloud save
-  };
-
-  const handlePushToCloud = async () => {
-    setIsSyncing(true);
-    try {
-      const dataToSave = {
-        'boat_fire_extinguishers': extinguishers,
-        'boat_inspection_history': history,
-        'boat_medical_stations': medicalStations,
-        'boat_medical_history': medicalHistory,
-        'boat_licenses': boatLicenses,
-        'boat_license_history': licenseHistory,
-        'boat_life_jackets': lifeJackets,
-        'boat_life_jacket_history': lifeJacketHistory,
-        'boat_maintenance_history': maintenanceRecords,
-      };
-
-      for (const [key, val] of Object.entries(dataToSave)) {
-        await saveToCloud(key, val);
-      }
-      triggerToast('ส่งข้อมูลของเครื่องนี้ขึ้นระบบคลาวด์สำเร็จแล้ว! ทุกเครื่องจะเห็นตรงกัน', 'success');
-    } catch (error: any) {
-      console.error(error);
-      triggerToast('ไม่สามารถส่งข้อมูลขึ้นคลาวด์ได้: กรุณาตรวจสอบการตั้งค่าฐานข้อมูล', 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handlePullFromCloud = async () => {
-    setIsSyncing(true);
-    try {
-      const cloudData = await loadAllFromCloud();
-      if (!cloudData || Object.keys(cloudData).length === 0) {
-        triggerToast('ไม่พบข้อมูลบนระบบคลาวด์หรือฐานข้อมูลยังว่างอยู่', 'info');
-        return;
-      }
-
-      if (cloudData['boat_fire_extinguishers']) {
-        setExtinguishers(cloudData['boat_fire_extinguishers']);
-        localStorage.setItem('boat_fire_extinguishers', JSON.stringify(cloudData['boat_fire_extinguishers']));
-      }
-      if (cloudData['boat_inspection_history']) {
-        setHistory(cloudData['boat_inspection_history']);
-        localStorage.setItem('boat_inspection_history', JSON.stringify(cloudData['boat_inspection_history']));
-      }
-      if (cloudData['boat_medical_stations']) {
-        setMedicalStations(cloudData['boat_medical_stations']);
-        localStorage.setItem('boat_medical_stations', JSON.stringify(cloudData['boat_medical_stations']));
-      }
-      if (cloudData['boat_medical_history']) {
-        setMedicalHistory(cloudData['boat_medical_history']);
-        localStorage.setItem('boat_medical_history', JSON.stringify(cloudData['boat_medical_history']));
-      }
-      if (cloudData['boat_licenses']) {
-        setBoatLicenses(cloudData['boat_licenses']);
-        localStorage.setItem('boat_licenses', JSON.stringify(cloudData['boat_licenses']));
-      }
-      if (cloudData['boat_license_history']) {
-        setLicenseHistory(cloudData['boat_license_history']);
-        localStorage.setItem('boat_license_history', JSON.stringify(cloudData['boat_license_history']));
-      }
-      if (cloudData['boat_life_jackets']) {
-        setLifeJackets(cloudData['boat_life_jackets']);
-        localStorage.setItem('boat_life_jackets', JSON.stringify(cloudData['boat_life_jackets']));
-      }
-      if (cloudData['boat_life_jacket_history']) {
-        setLifeJacketHistory(cloudData['boat_life_jacket_history']);
-        localStorage.setItem('boat_life_jacket_history', JSON.stringify(cloudData['boat_life_jacket_history']));
-      }
-      if (cloudData['boat_maintenance_history']) {
-        setMaintenanceRecords(cloudData['boat_maintenance_history']);
-        localStorage.setItem('boat_maintenance_history', JSON.stringify(cloudData['boat_maintenance_history']));
-      }
-
-      triggerToast('ดึงข้อมูลล่าสุดจากระบบคลาวด์ลงเครื่องนี้เรียบร้อยแล้ว!', 'success');
-    } catch (error: any) {
-      console.error(error);
-      triggerToast('ไม่สามารถดึงข้อมูลได้: กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   // Google OAuth Login
@@ -994,32 +990,44 @@ export default function App() {
     }
   };
 
-  // Manual Sync trigger button
-  const handleManualSync = () => {
-    if (!accessToken || !sheetsConfig.spreadsheetId) {
-      triggerToast('กรุณาสร้างสเปรดชีตเชื่อมงานก่อนทำรายการซิงค์', 'error');
-      return;
+  // Helper to add a rectification photo to a history record
+  const handleAddRectificationPhoto = (recordId: string, category: string, photoUrl: string) => {
+    if (category === 'extinguisher') {
+      const updatedHistory = history.map(h => h.id === recordId ? { ...h, rectificationPhotoUrl: photoUrl } : h);
+      setHistory(updatedHistory);
+      localStorage.setItem('boat_inspection_history', JSON.stringify(updatedHistory));
+    } else if (category === 'medical') {
+      const updatedHistory = medicalHistory.map(h => h.id === recordId ? { ...h, rectificationPhotoUrl: photoUrl } : h);
+      setMedicalHistory(updatedHistory);
+      localStorage.setItem('boat_medical_history', JSON.stringify(updatedHistory));
+    } else if (category === 'license') {
+      const updatedHistory = licenseHistory.map(h => h.id === recordId ? { ...h, rectificationPhotoUrl: photoUrl } : h);
+      setLicenseHistory(updatedHistory);
+      localStorage.setItem('boat_license_history', JSON.stringify(updatedHistory));
+    } else if (category === 'lifejacket') {
+      const updatedHistory = lifeJacketHistory.map(h => h.id === recordId ? { ...h, rectificationPhotoUrl: photoUrl } : h);
+      setLifeJacketHistory(updatedHistory);
+      localStorage.setItem('boat_life_jacket_history', JSON.stringify(updatedHistory));
     }
-    performFullSheetSync(accessToken, sheetsConfig.spreadsheetId);
+    triggerToast('แนบรูปถ่ายการแก้ไขสำเร็จ', 'success');
   };
 
   // Inspect save logic
-  const handleSaveInspection = async (recordData: Omit<InspectionRecord, 'id'>, updatedType?: ExtinguisherType, updatedSize?: string) => {
+  const handleSaveInspection = (recordData: Omit<InspectionRecord, 'id'>, updatedType?: ExtinguisherType, updatedSize?: string) => {
     if (!inspectingExt) return;
 
-    const newRecordId = `REC-${Date.now()}`;
-    const uploadedPhotoUrl = await uploadPhotoIfNeeded(recordData.photoUrl, 'inspection-photos', newRecordId);
-
+    // 1. Generate unique ID for historical logs
     const newRecord: InspectionRecord = {
       ...recordData,
-      id: newRecordId,
-      photoUrl: uploadedPhotoUrl,
+      id: `REC-${Date.now()}`,
     };
 
+    // 2. Add to history array
     const newHistory = [newRecord, ...history];
     setHistory(newHistory);
-    persistData('boat_inspection_history', newHistory);
+    localStorage.setItem('boat_inspection_history', JSON.stringify(newHistory));
 
+    // 3. Update the fire extinguisher current status, including selectable type and size
     const updatedExts = extinguishers.map((e) => {
       if (e.id === inspectingExt.id) {
         return {
@@ -1036,21 +1044,27 @@ export default function App() {
           overallStatus: recordData.overallStatus,
           expiryDate: recordData.expiryDate,
           remarks: recordData.remarks,
-          lastPhotoUrl: uploadedPhotoUrl,
+          lastPhotoUrl: recordData.photoUrl,
         };
       }
       return e;
     });
 
     setExtinguishers(updatedExts);
-    persistData('boat_fire_extinguishers', updatedExts);
+    localStorage.setItem('boat_fire_extinguishers', JSON.stringify(updatedExts));
 
     triggerToast(`บันทึกผลตรวจสอบถังดับเพลิง ${inspectingExt.id} เสร็จสิ้นแล้ว!`, 'success');
 
+    // 4. Auto sync to connected Google Sheet if authenticated and configured
     if (accessToken && sheetsConfig.spreadsheetId) {
+      // Run sync in the background so UI doesn't lag
       syncCurrentExtinguishersToSheets(accessToken, sheetsConfig.spreadsheetId, updatedExts)
-        .then(() => appendInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]))
         .then(() => {
+          // Then append this single new inspection to the sheets history
+          return appendInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]);
+        })
+        .then(() => {
+          // Update sync time
           const updatedConfig = {
             ...sheetsConfig,
             lastSyncedAt: new Date().toLocaleString('th-TH'),
@@ -1069,20 +1083,19 @@ export default function App() {
   };
 
   // Medical Inspection save logic
-  const handleSaveMedicalInspection = async (recordData: Omit<MedicalInspectionRecord, 'id'>) => {
+  const handleSaveMedicalInspection = (recordData: Omit<MedicalInspectionRecord, 'id'>) => {
     const newRecordId = `MEDREC-${Date.now()}`;
-    const uploadedPhotoUrl = await uploadPhotoIfNeeded(recordData.photoUrl, 'medical-photos', newRecordId);
-
     const newRecord: MedicalInspectionRecord = {
       ...recordData,
       id: newRecordId,
-      photoUrl: uploadedPhotoUrl,
     };
 
+    // Update History log list
     const newHistory = [newRecord, ...medicalHistory];
     setMedicalHistory(newHistory);
-    persistData('boat_medical_history', newHistory);
+    localStorage.setItem('boat_medical_history', JSON.stringify(newHistory));
 
+    // Update individual station metrics
     const updatedStations = medicalStations.map((st) => {
       if (st.id === recordData.stationId) {
         return {
@@ -1114,21 +1127,27 @@ export default function App() {
           lastInspector: recordData.inspectorName,
           overallStatus: recordData.overallStatus === 'Pass' ? 'Pass' as any : 'Fail' as any,
           remarks: recordData.remarks,
-          lastPhotoUrl: uploadedPhotoUrl,
+          lastPhotoUrl: recordData.photoUrl,
         };
       }
       return st;
     });
 
     setMedicalStations(updatedStations);
-    persistData('boat_medical_stations', updatedStations);
+    localStorage.setItem('boat_medical_stations', JSON.stringify(updatedStations));
 
     triggerToast(`บันทึกการตรวจเช็คเวชภัณฑ์สำหรับ ${recordData.targetName} เรียบร้อยแล้ว!`, 'success');
 
+    // 4. Auto sync to connected Google Sheet if authenticated and configured
     if (accessToken && sheetsConfig.spreadsheetId) {
+      // Run sync in the background so UI doesn't lag
       syncCurrentMedicalKitsToSheets(accessToken, sheetsConfig.spreadsheetId, updatedStations)
-        .then(() => appendMedicalInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]))
         .then(() => {
+          // Then append this single new inspection to the sheets history
+          return appendMedicalInspectionsToHistorySheet(accessToken, sheetsConfig.spreadsheetId, [newRecord]);
+        })
+        .then(() => {
+          // Update sync time
           const updatedConfig = {
             ...sheetsConfig,
             lastSyncedAt: new Date().toLocaleString('th-TH'),
@@ -1144,34 +1163,46 @@ export default function App() {
     }
   };
 
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmDelete({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmDelete(null);
+      }
+    });
+  };
+
   const handleDeleteMedicalInspection = (id: string) => {
     if (!id) return;
-    if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบเวชภัณฑ์นี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้')) return;
-    const newHistory = medicalHistory.filter(h => h.id !== id);
-    setMedicalHistory(newHistory);
-    persistData('boat_medical_history', newHistory);
-    triggerToast('ลบประวัติการตรวจสอบเวชภัณฑ์สำเร็จ', 'info');
+    showConfirm(
+      'ยืนยันการลบ',
+      'คุณต้องการลบประวัติการตรวจสอบเวชภัณฑ์นี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้',
+      () => {
+        const newHistory = medicalHistory.filter(h => h.id !== id);
+        setMedicalHistory(newHistory);
+        localStorage.setItem('boat_medical_history', JSON.stringify(newHistory));
+        triggerToast('ลบประวัติการตรวจสอบเวชภัณฑ์สำเร็จ', 'info');
+      }
+    );
   };
 
   // Boat License Inspection save logic
-  const handleSaveLicenseInspection = async (recordData: Omit<LicenseInspectionRecord, 'id'>) => {
+  const handleSaveLicenseInspection = (recordData: Omit<LicenseInspectionRecord, 'id'>) => {
     const newRecordId = `LICREC-${Date.now()}`;
-    const uploadedVesselPhotoUrl = await uploadPhotoIfNeeded(recordData.vesselPhotoUrl, 'license-photos', `${newRecordId}-vessel`);
-    const uploadedHelmsmanPhotoUrl = await uploadPhotoIfNeeded(recordData.helmsmanPhotoUrl, 'license-photos', `${newRecordId}-helmsman`);
-    const uploadedEngineerPhotoUrl = await uploadPhotoIfNeeded(recordData.engineerPhotoUrl, 'license-photos', `${newRecordId}-engineer`);
-
     const newRecord: LicenseInspectionRecord = {
       ...recordData,
       id: newRecordId,
-      vesselPhotoUrl: uploadedVesselPhotoUrl,
-      helmsmanPhotoUrl: uploadedHelmsmanPhotoUrl,
-      engineerPhotoUrl: uploadedEngineerPhotoUrl,
     };
 
+    // Update History log list
     const newHistory = [newRecord, ...licenseHistory];
     setLicenseHistory(newHistory);
-    persistData('boat_license_history', newHistory);
+    localStorage.setItem('boat_license_history', JSON.stringify(newHistory));
 
+    // Update individual boat licensing metrics
     const updatedLicenses = boatLicenses.map((b) => {
       if (b.boatId === recordData.boatId) {
         return {
@@ -1191,55 +1222,57 @@ export default function App() {
           lastInspector: recordData.inspectorName,
           overallStatus: recordData.overallStatus,
           remarks: recordData.remarks,
-          vesselPhotoUrl: uploadedVesselPhotoUrl,
-          helmsmanPhotoUrl: uploadedHelmsmanPhotoUrl,
-          engineerPhotoUrl: uploadedEngineerPhotoUrl,
+          vesselPhotoUrl: recordData.vesselPhotoUrl,
+          helmsmanPhotoUrl: recordData.helmsmanPhotoUrl,
+          engineerPhotoUrl: recordData.engineerPhotoUrl,
         };
       }
       return b;
     });
 
     setBoatLicenses(updatedLicenses);
-    persistData('boat_licenses', updatedLicenses);
+    localStorage.setItem('boat_licenses', JSON.stringify(updatedLicenses));
 
     triggerToast(`บันทึกการส่งตรวจสอบใบอนุญาตของเรือ ${recordData.boatName} เสร็จสิ้น!`, 'success');
   };
 
   const handleDeleteLicenseInspection = (id: string) => {
     if (!id) return;
-    if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบใบอนุญาตนี้ใช่หรือไม่?')) return;
-    const newHistory = licenseHistory.filter(h => h.id !== id);
-    setLicenseHistory(newHistory);
-    persistData('boat_license_history', newHistory);
-    triggerToast('ลบประวัติการตรวจสอบใบอนุญาตสำเร็จ', 'info');
+    showConfirm(
+      'ยืนยันการลบ',
+      'คุณต้องการลบประวัติการตรวจสอบใบอนุญาตนี้ใช่หรือไม่?',
+      () => {
+        const newHistory = licenseHistory.filter(h => h.id !== id);
+        setLicenseHistory(newHistory);
+        localStorage.setItem('boat_license_history', JSON.stringify(newHistory));
+        triggerToast('ลบประวัติการตรวจสอบใบอนุญาตสำเร็จ', 'info');
+      }
+    );
   };
 
   // Boat Life Jacket Inspection save logic
-  const handleSaveLifeJacketInspection = async (recordData: LifeJacketInspectionRecord | Omit<LifeJacketInspectionRecord, 'id'>) => {
+  const handleSaveLifeJacketInspection = (recordData: LifeJacketInspectionRecord | Omit<LifeJacketInspectionRecord, 'id'>) => {
     let updatedHistory = [...lifeJacketHistory];
     let recordWithId: LifeJacketInspectionRecord;
-    const isNewRecord = !('id' in recordData && recordData.id);
-    const recordId = isNewRecord ? `LJREC-${Date.now()}` : recordData.id;
-    const uploadedPhotoUrl = await uploadPhotoIfNeeded(recordData.photoUrl, 'lifejacket-photos', recordId);
 
     if ('id' in recordData && recordData.id) {
-      recordWithId = {
-        ...(recordData as LifeJacketInspectionRecord),
-        photoUrl: uploadedPhotoUrl,
-      };
+      // Editing existing record
+      recordWithId = recordData as LifeJacketInspectionRecord;
       updatedHistory = updatedHistory.map((rec) => rec.id === recordWithId.id ? recordWithId : rec);
     } else {
+      // New record
+      const newRecordId = `LJREC-${Date.now()}`;
       recordWithId = {
-        ...(recordData as Omit<LifeJacketInspectionRecord, 'id'>),
-        id: recordId,
-        photoUrl: uploadedPhotoUrl,
+        ...recordData,
+        id: newRecordId,
       } as LifeJacketInspectionRecord;
       updatedHistory = [recordWithId, ...updatedHistory];
     }
 
     setLifeJacketHistory(updatedHistory);
-    persistData('boat_life_jacket_history', updatedHistory);
+    localStorage.setItem('boat_life_jacket_history', JSON.stringify(updatedHistory));
 
+    // Update individual boat life jacket state
     const updatedJackets = lifeJackets.map((b) => {
       if (b.boatId === recordWithId.boatId) {
         return {
@@ -1255,7 +1288,7 @@ export default function App() {
           lastInspector: recordWithId.inspectorName,
           overallStatus: recordWithId.overallStatus,
           remarks: recordWithId.remarks,
-          photoUrl: uploadedPhotoUrl,
+          photoUrl: recordWithId.photoUrl,
           seats: recordWithId.seats || b.seats,
         };
       }
@@ -1263,27 +1296,37 @@ export default function App() {
     });
 
     setLifeJackets(updatedJackets);
-    persistData('boat_life_jackets', updatedJackets);
+    localStorage.setItem('boat_life_jackets', JSON.stringify(updatedJackets));
 
     triggerToast(`บันทึกการตรวจสอบเสื้อชูชีพของเรือ ${recordWithId.boatName} สำเร็จ!`, 'success');
   };
 
   const handleDeleteLifeJacketInspection = (id: string) => {
     if (!id) return;
-    if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบเสื้อชูชีพนี้ใช่หรือไม่?')) return;
-    const newHistory = lifeJacketHistory.filter(h => h.id !== id);
-    setLifeJacketHistory(newHistory);
-    persistData('boat_life_jacket_history', newHistory);
-    triggerToast('ลบประวัติการตรวจสอบเสื้อชูชีพสำเร็จ', 'info');
+    showConfirm(
+      'ยืนยันการลบ',
+      'คุณต้องการลบประวัติการตรวจสอบเสื้อชูชีพนี้ใช่หรือไม่?',
+      () => {
+        const newHistory = lifeJacketHistory.filter(h => h.id !== id);
+        setLifeJacketHistory(newHistory);
+        localStorage.setItem('boat_life_jacket_history', JSON.stringify(newHistory));
+        triggerToast('ลบประวัติการตรวจสอบเสื้อชูชีพสำเร็จ', 'info');
+      }
+    );
   };
 
   const handleDeleteExtinguisherInspection = (id: string) => {
     if (!id) return;
-    if (!window.confirm('คุณต้องการลบประวัติการตรวจสอบถังดับเพลิงนี้ใช่หรือไม่?')) return;
-    const newHistory = history.filter(h => h.id !== id);
-    setHistory(newHistory);
-    persistData('boat_inspection_history', newHistory);
-    triggerToast('ลบประวัติการตรวจสอบถังดับเพลิงสำเร็จ', 'info');
+    showConfirm(
+      'ยืนยันการลบ',
+      'คุณต้องการลบประวัติการตรวจสอบถังดับเพลิงนี้ใช่หรือไม่?',
+      () => {
+        const newHistory = history.filter(h => h.id !== id);
+        setHistory(newHistory);
+        localStorage.setItem('boat_inspection_history', JSON.stringify(newHistory));
+        triggerToast('ลบประวัติการตรวจสอบถังดับเพลิงสำเร็จ', 'info');
+      }
+    );
   };
 
   const handleDeleteUnifiedRecord = (id: string, category: 'extinguisher' | 'lifejacket' | 'license' | 'medical') => {
@@ -1304,22 +1347,21 @@ export default function App() {
   };
 
   // Boat Maintenance save logic
-  const handleSaveMaintenanceRecord = async (recordData: Omit<MaintenanceRecord, 'id'>) => {
+  const handleSaveMaintenanceRecord = (recordData: Omit<MaintenanceRecord, 'id'>) => {
     const newRecordId = `MAINREC-${Date.now()}`;
-    const uploadedPhotos = await uploadPhotosIfNeeded(recordData.photos, 'maintenance-photos', newRecordId);
-
     const newRecord: MaintenanceRecord = {
       ...recordData,
       id: newRecordId,
-      photos: uploadedPhotos,
     };
 
+    // Update state
     const updatedRecords = [newRecord, ...maintenanceRecords];
     setMaintenanceRecords(updatedRecords);
-    persistData('boat_maintenance_history', updatedRecords);
+    localStorage.setItem('boat_maintenance_history', JSON.stringify(updatedRecords));
 
     triggerToast(`บันทึกข้อมูลการซ่อมบำรุงเรือ ${recordData.boatName} สำเร็จ!`, 'success');
 
+    // Auto sync to connected Google Sheet if authenticated and configured
     if (accessToken && sheetsConfig.spreadsheetId) {
       syncMaintenanceToSheets(accessToken, sheetsConfig.spreadsheetId, updatedRecords)
         .then(() => {
@@ -1342,7 +1384,7 @@ export default function App() {
   const handleDeleteMaintenanceRecord = (id: string) => {
     const updatedRecords = maintenanceRecords.filter((r) => r.id !== id);
     setMaintenanceRecords(updatedRecords);
-    persistData('boat_maintenance_history', updatedRecords);
+    localStorage.setItem('boat_maintenance_history', JSON.stringify(updatedRecords));
     triggerToast('ลบบันทึกประวัติการซ่อมบำรุงเรียบร้อยแล้ว', 'info');
 
     // Auto sync to connected Google Sheet if authenticated and configured
@@ -1362,14 +1404,13 @@ export default function App() {
     }
   };
 
-  const handleUpdateMaintenanceStatus = (id: string, newStatus: MaintenanceStatus) => {
+  const handleUpdateMaintenanceRecord = (id: string, updates: Partial<MaintenanceRecord>) => {
     const updatedRecords = maintenanceRecords.map((r) =>
-      r.id === id ? { ...r, status: newStatus } : r
+      r.id === id ? { ...r, ...updates } : r
     );
     setMaintenanceRecords(updatedRecords);
-    persistData('boat_maintenance_history', updatedRecords);
-    triggerToast('อัปเดตสถานะการซ่อมบำรุงเรียบร้อยแล้ว', 'success');
-
+    localStorage.setItem('boat_maintenance_history', JSON.stringify(updatedRecords));
+    
     // Auto sync to connected Google Sheet if authenticated and configured
     if (accessToken && sheetsConfig.spreadsheetId) {
       syncMaintenanceToSheets(accessToken, sheetsConfig.spreadsheetId, updatedRecords)
@@ -1387,11 +1428,16 @@ export default function App() {
     }
   };
 
+  const handleUpdateMaintenanceStatus = (id: string, newStatus: MaintenanceStatus) => {
+    handleUpdateMaintenanceRecord(id, { status: newStatus });
+    triggerToast('อัปเดตสถานะการซ่อมบำรุงเรียบร้อยแล้ว', 'success');
+  };
+
   // Clear local storage history
   const handleClearHistory = (category: 'all' | 'extinguisher' | 'lifejacket' | 'license' | 'medical' = 'all') => {
     if (category === 'all' || category === 'extinguisher') {
       setHistory([]);
-      persistData('boat_inspection_history', []);
+      localStorage.setItem('boat_inspection_history', JSON.stringify([]));
       
       // Also reset all fire extinguisher check statuses back to "Never Inspected"
       const resetExts = extinguishers.map((e) => ({
@@ -1407,12 +1453,12 @@ export default function App() {
         remarks: '',
       }));
       setExtinguishers(resetExts);
-      persistData('boat_fire_extinguishers', resetExts);
+      localStorage.setItem('boat_fire_extinguishers', JSON.stringify(resetExts));
     }
 
     if (category === 'all' || category === 'lifejacket') {
       setLifeJacketHistory([]);
-      persistData('boat_life_jacket_history', []);
+      localStorage.setItem('boat_life_jacket_history', JSON.stringify([]));
       
       const resetLJs = lifeJackets.map((j) => ({
         ...j,
@@ -1427,12 +1473,12 @@ export default function App() {
         remarks: '',
       }));
       setLifeJackets(resetLJs);
-      persistData('boat_life_jackets', resetLJs);
+      localStorage.setItem('boat_life_jackets', JSON.stringify(resetLJs));
     }
 
     if (category === 'all' || category === 'license') {
       setLicenseHistory([]);
-      persistData('boat_license_history', []);
+      localStorage.setItem('boat_license_history', JSON.stringify([]));
       
       const resetLicenses = boatLicenses.map((l) => ({
         ...l,
@@ -1445,12 +1491,12 @@ export default function App() {
         remarks: '',
       }));
       setBoatLicenses(resetLicenses);
-      persistData('boat_licenses', resetLicenses);
+      localStorage.setItem('boat_licenses', JSON.stringify(resetLicenses));
     }
 
     if (category === 'all' || category === 'medical') {
       setMedicalHistory([]);
-      persistData('boat_medical_history', []);
+      localStorage.setItem('boat_medical_history', JSON.stringify([]));
       
       const resetMeds = medicalStations.map((s) => ({
         ...s,
@@ -1472,7 +1518,7 @@ export default function App() {
         remarks: '',
       }));
       setMedicalStations(resetMeds);
-      persistData('boat_medical_stations', resetMeds);
+      localStorage.setItem('boat_medical_stations', JSON.stringify(resetMeds));
     }
     
     triggerToast('ล้างประวัติเครื่องและการบันทึกในหมวดหมู่ที่เลือกเรียบร้อยแล้ว', 'info');
@@ -1481,7 +1527,8 @@ export default function App() {
   // Nav to specific boat inspection lists
   const handleSelectBoat = (boatId: string | null) => {
     setSelectedBoatId(boatId);
-    setActiveTab('boats');
+    setMainTab('forms');
+    setFormsSubTab('extinguishers');
   };
 
   // Current month dynamic calculations for reminder alerts
@@ -1493,237 +1540,318 @@ export default function App() {
   const pendingInspectionsCount = totalCount - inspectedThisMonthCount;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
+    <div className="min-h-screen bg-white flex flex-col justify-between text-slate-950">
       
-      {/* Master Core Module Switcher */}
-      <div className="bg-slate-950 text-white border-b border-slate-800 text-xs py-2.5 px-4 flex flex-col sm:flex-row justify-between items-center z-45 relative gap-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <HeartPulse className="h-4.5 w-4.5 text-teal-400 animate-pulse shrink-0" />
-          <span className="font-extrabold text-slate-200 tracking-wider uppercase text-[10px] select-none text-center sm:text-left">
-            CHAO PHRAYA INTEGRATED MARITIME SAFETY SUITE
-          </span>
+      {/* Modern Unified Header */}
+      <div className="bg-white text-slate-950 border-b-2 border-slate-300 text-xs py-3.5 px-4 flex flex-col lg:flex-row justify-between items-center z-45 relative gap-4 shrink-0 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center shrink-0 border border-teal-200 shadow-sm animate-pulse">
+            <HeartPulse className="h-5.5 w-5.5 text-teal-600" />
+          </div>
+          <div className="text-center lg:text-left">
+            <span className="font-black text-slate-950 tracking-wider uppercase text-sm font-sans block">
+              ระบบบูรณาการความปลอดภัยทางน้ำ เจ้าพระยา (CHAO PHRAYA MARITIME SAFETY SUITE)
+            </span>
+            <span className="block text-[10px] text-teal-600 uppercase font-black tracking-widest font-sans mt-1">
+              • ตรวจถังดับเพลิงเรือ • เสื้อชูชีพประจำจุด • ใบอนุญาตเรือและกำลังพล • ตู้ยาและเวชภัณฑ์ • บันทึกการแจ้งซ่อมบำรุง
+            </span>
+          </div>
         </div>
-        <div className="flex flex-wrap bg-slate-900 p-0.5 rounded border border-slate-800 shrink-0 select-none gap-0.5 sm:gap-0 font-sans">
+
+        {/* Primary Module Level Switcher Tabs - Now inside Header */}
+        <div className="flex bg-white p-1 rounded-xl border border-slate-300 select-none font-sans gap-1 shadow-inner w-full lg:w-auto">
           <button
-            onClick={() => setAppModule('security')}
-            className={`px-3 py-1.5 rounded-sm text-[11px] font-extrabold cursor-pointer transition-all flex items-center gap-1.5 ${
-              appModule === 'security'
-                ? 'bg-red-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setMainTab('dashboard')}
+            className={`flex-1 lg:flex-none px-4 py-2 rounded-lg text-xs font-black cursor-pointer transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              mainTab === 'dashboard'
+                ? 'bg-teal-600 text-white shadow-md font-extrabold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
             }`}
           >
-            🛡️ ระบบตรวจความปลอดภัย & ใบอนุญาตเรือ (7 ลำ)
+            <span className="text-sm">📊</span> แดชบอร์ดสรุปสถิติ & ภาพรวม (Dashboard)
           </button>
           <button
-            onClick={() => setAppModule('medical')}
-            className={`px-3 py-1.5 rounded-sm text-[11px] font-extrabold cursor-pointer transition-all flex items-center gap-1.5 ${
-              appModule === 'medical'
-                ? 'bg-teal-800 text-white shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setMainTab('forms')}
+            className={`flex-1 lg:flex-none px-4 py-2 rounded-lg text-xs font-black cursor-pointer transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              mainTab === 'forms'
+                ? 'bg-teal-600 text-white shadow-md font-extrabold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
             }`}
           >
-            🏥 ตู้ยาเวชภัณฑ์ (เรือ 7 ลำ / ท่าเรือ 11 ท่า)
-          </button>
-          <button
-            onClick={() => setAppModule('maintenance')}
-            className={`px-3 py-1.5 rounded-sm text-[11px] font-extrabold cursor-pointer transition-all flex items-center gap-1.5 ${
-              appModule === 'maintenance'
-                ? 'bg-amber-650 text-white shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            🔧 ประวัติการซ่อมบำรุงเรือ (7 ลำ)
+            <span className="text-sm">📋</span> บันทึกการตรวจสอบ & งานปฏิบัติการ (Inspections & Forms)
           </button>
         </div>
       </div>
 
-      {/* Firebase Cloud Sync Control Bar */}
-      <div className="bg-slate-900 border-b border-slate-800 text-[11px] px-4 py-2 flex flex-col sm:flex-row justify-between items-center gap-2 select-none z-40 relative">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px]">☁️</span>
-          <span className="font-extrabold text-slate-300 font-mono">FIREBASE CLOUD DATABASE:</span>
-          {isCloudLoading ? (
-            <span className="text-amber-400 font-bold flex items-center gap-1.5">
-              <span className="animate-spin inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full"></span>
-              กำลังโหลดข้อมูลจากคลาวด์...
-            </span>
-          ) : isCloudAvailable() ? (
-            <span className="text-emerald-400 font-bold">
-              ● เชื่อมต่อระบบคลาวด์แล้ว (ข้อมูลทุกเครื่องเชื่อมโยงกันแบบ Real-time)
-            </span>
+      {/* Secondary Sub-Tabs Navigation */}
+      <div className="bg-white text-slate-950 shadow-sm border-b-2 border-slate-300 shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 shrink-0">
+          {mainTab === 'dashboard' ? (
+            <nav className="flex space-x-1 pt-2.5">
+              {[
+                { id: 'security', label: '🛡️ ความปลอดภัย & อุปกรณ์ชูชีพ', icon: ShieldCheck },
+                { id: 'vessel-summary', label: '📊 ตารางสรุปรายลำเรือ', icon: FileSpreadsheet },
+                { id: 'executive-report', label: '📋 รายงานสรุปผู้บริหาร', icon: FileSpreadsheet },
+                { id: 'extinguisher-map', label: '🧯 แผนผังถังดับเพลิง', icon: MapIcon },
+                { id: 'lifejacket-map', label: '🧡 แผนผังจุดติดตั้งชูชีพ', icon: Grid },
+                { id: 'medical', label: '🏥 คลังยา & เวชภัณฑ์ยารวม', icon: HeartPulse },
+                { id: 'maintenance', label: '🔧 สถิติกิจกรรมซ่อมบำรุงรักษา', icon: Sliders },
+              ].map((sub) => {
+                const SubIcon = sub.icon;
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => setDashboardSubTab(sub.id as any)}
+                    className={`py-3 px-4 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 select-none border-b-2 cursor-pointer uppercase font-mono tracking-wide ${
+                      dashboardSubTab === sub.id
+                        ? 'bg-white text-teal-600 border-teal-500 font-extrabold shadow-sm'
+                        : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100/60 border-transparent'
+                    }`}
+                  >
+                    <SubIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span>{sub.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
           ) : (
-            <span className="text-red-400 font-bold">
-              ✕ ข้อผิดพลาดคลาวด์: {getFirestoreError()?.includes('permission-denied') ? 'การสิทธิ์ถูกปฏิเสธ (โปรดตั้งค่า Rules ใน Firebase เป็น true)' : getFirestoreError()?.includes('timeout') ? 'หมดเวลาการเชื่อมต่อ (โปรดเปิดใช้งาน Firestore database)' : getFirestoreError() || 'โปรดเปิดใช้งาน Firestore database ใน Firebase Console'}
-            </span>
+            <nav className="flex space-x-1 pt-2.5 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'extinguishers', label: '🧯 ตรวจถังดับเพลิง', icon: Flame },
+                { id: 'lifejackets', label: '🧡 ตรวจเสื้อชูชีพ', icon: LifeBuoy },
+                { id: 'licenses', label: '🚢 ตรวจใบอนุญาตเรือ & เจ้าหน้าที่', icon: ShieldCheck },
+                { id: 'medical', label: '🏥 บันทึกตรวจตู้เวชภัณฑ์รายจุด', icon: HeartPulse },
+                { id: 'maintenance', label: '🛠️ บันทึกงานแจ้งซ่อมบำรุง', icon: Sliders },
+                { id: 'history', label: '📅 ประวัติการตรวจเช็คทั้งหมด', icon: Calendar },
+                { id: 'extinguisher-report', label: '📋 รายงานสรุปเครื่องดับเพลิง', icon: FileSpreadsheet },
+              ].map((sub) => {
+                const SubIcon = sub.icon;
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => {
+                      setFormsSubTab(sub.id as any);
+                      if (sub.id !== 'extinguishers') setSelectedBoatId(null);
+                    }}
+                    className={`py-3 px-4 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 select-none border-b-2 cursor-pointer uppercase font-mono tracking-wide shrink-0 ${
+                      formsSubTab === sub.id
+                        ? 'bg-white text-teal-600 border-teal-500 font-extrabold shadow-sm'
+                        : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100/60 border-transparent'
+                    }`}
+                  >
+                    <SubIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span>{sub.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePullFromCloud}
-            disabled={isCloudLoading || isSyncing}
-            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 px-2.5 py-1 rounded border border-slate-750 font-bold cursor-pointer transition-colors active:scale-95 text-[10px]"
-            title="ดึงข้อมูลจากระบบคลาวด์มาเขียนทับข้อมูลในเครื่องนี้"
-          >
-            🔄 ดึงข้อมูลคลาวด์มาลงเครื่องนี้ (Pull)
-          </button>
-          <button
-            onClick={handlePushToCloud}
-            disabled={isCloudLoading || isSyncing}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-1 rounded font-bold cursor-pointer transition-colors active:scale-95 text-[10px]"
-            title="ส่งข้อมูลทั้งหมดของเครื่องนี้ขึ้นไปเขียนทับบนคลาวด์"
-          >
-            📤 ส่งเครื่องนี้ขึ้นคลาวด์ (Push)
-          </button>
         </div>
       </div>
 
-      {appModule === 'security' ? (
-        <>
-          {/* Dynamic Alerts / Announcement Bar */}
-          {pendingInspectionsCount > 0 && (
-            <div className="bg-amber-500 text-white text-xs px-4 py-2 font-bold flex items-center justify-between shadow-xs transition-all animate-bounce-short">
-              <div className="flex items-center gap-2 mx-auto sm:mx-0">
-                <Bell className="h-4 w-4 animate-swing shrink-0" />
-                <span>
-                  ระบบความปลอดภัยแจ้งเตือน: เดือนนี้มีค้างตรวจประจำงวดอีก <strong>{pendingInspectionsCount} ถัง</strong> (ตรวจแล้ว {inspectedThisMonthCount}/{totalCount} ถัง) 
-                </span>
-              </div>
-              <button 
-                onClick={() => handleSelectBoat(null)} 
-                className="hidden sm:block underline hover:text-slate-100 transition-colors text-[11px]"
-              >
-                ไปตรวจสอบทันที &rarr;
-              </button>
+
+
+      {/* Main Container Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full relative">
+        
+        {/* Toast Notification Box */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 md:right-8 bg-slate-950 text-white rounded-sm border-2 border-slate-900 p-4 shadow-2xl z-50 animate-fade-in flex items-center gap-3 max-w-sm">
+            <div className={`p-2 rounded-sm shrink-0 border ${
+              toastMessage.type === 'success' 
+                ? 'bg-green-500/10 text-green-400 border-green-500/20' 
+                : toastMessage.type === 'error' 
+                ? 'bg-red-500/10 text-red-400 border-red-500/20' 
+                : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+            }`}>
+              <ShieldCheck className="h-5 w-5" />
             </div>
-          )}
-
-          {/* Navigation & Header */}
-          <header className="bg-slate-900 text-white shadow-xs relative overflow-hidden shrink-0 border-b-2 border-slate-950">
-            <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-20 -translate-y-10 scale-125">
-              <ShieldCheck className="h-64 w-64 text-red-500" />
+            <div>
+              <span className="text-[9px] text-slate-500 block uppercase font-mono tracking-widest font-extrabold">SYSTEM NOTICE</span>
+              <p className="text-xs text-slate-100 font-bold mt-0.5">${toastMessage.text}</p>
             </div>
+          </div>
+        )}
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-red-600 rounded flex items-center justify-center shrink-0 border border-red-500 shadow-sm">
-                  <ShieldCheck className="h-6.5 w-6.5 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold tracking-tight uppercase">
-                    Chao Phraya Fleet Safety & Compliance
-                  </h1>
-                  <p className="text-xs text-slate-400 uppercase tracking-widest leading-none mt-1">
-                    Vessel Fire Security, Life Jackets, & Licensing Suite
-                  </p>
-                </div>
-              </div>
-
-              {/* Right Col: Geometric Balance Stats columns */}
-              <div className="flex flex-wrap items-center gap-6 md:gap-8 bg-slate-950/40 p-3 px-5 border border-slate-800 rounded">
-                <div className="text-left">
-                  <span className="block text-[10px] text-slate-500 uppercase font-bold tracking-widest">Total Fleet Status</span>
-                  <span className="text-green-400 font-mono text-base font-bold">
-                    {(totalCount > 0 ? (((totalCount - extinguishers.filter((e) => e.overallStatus === 'Fail').length) / totalCount) * 100).toFixed(1) : '100.0')}% SECURE
-                  </span>
-                </div>
-                <div className="w-px h-8 bg-slate-800"></div>
-                <div className="text-left">
-                  <span className="block text-[10px] text-slate-500 uppercase font-bold tracking-widest">Monthly Audits</span>
-                  <span className="text-amber-400 font-mono text-base font-bold">
-                    {pendingInspectionsCount < 10 ? `0${pendingInspectionsCount}` : pendingInspectionsCount} PENDING
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Tab Selection Row */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 shrink-0">
-              <nav className="flex space-x-1 border-t border-slate-800 pt-3">
-                {[
-                  { id: 'dashboard', label: 'สรุปแผงควบคุม (Dashboard)', icon: Activity },
-                  { id: 'boats', label: '🧯 ตรวจถังดับเพลิง', icon: Flame },
-                  { id: 'lifejackets', label: '🧡 ตรวจเสื้อชูชีพ', icon: LifeBuoy },
-                  { id: 'licenses', label: '🚢 ใบอนุญาตเรือ & เจ้าหน้าที่', icon: ShieldCheck },
-                  { id: 'history', label: '📅 ประวัติบันทึกความปลอดภัย', icon: Calendar },
-                ].map((tab) => {
-                  const TabIcon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        setActiveTab(tab.id as any);
-                        if (tab.id !== 'boats') setSelectedBoatId(null);
-                      }}
-                      className={`py-3 px-4 text-xs font-bold rounded-t-sm transition-all flex items-center gap-2 select-none border-b-2 cursor-pointer uppercase font-mono tracking-wide ${
-                        activeTab === tab.id
-                          ? 'bg-slate-50 text-slate-900 border-red-600 font-extrabold'
-                          : 'text-slate-400 hover:text-slate-200 border-transparent'
-                      }`}
-                    >
-                      <TabIcon className="h-4 w-4" />
-                      <span>{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-          </header>
-
-          {/* Main Container Area */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full relative">
-            
-            {/* Toast Notification Box */}
-            {toastMessage && (
-              <div className="fixed bottom-6 right-6 md:right-8 bg-slate-950 text-white rounded-sm border-2 border-slate-900 p-4 shadow-2xl z-50 animate-fade-in flex items-center gap-3 max-w-sm">
-                <div className={`p-2 rounded-sm shrink-0 border ${
-                  toastMessage.type === 'success' 
-                    ? 'bg-green-500/10 text-green-400 border-green-500/20' 
-                    : toastMessage.type === 'error' 
-                    ? 'bg-red-500/10 text-red-400 border-red-500/20' 
-                    : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                }`}>
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-500 block uppercase font-mono tracking-widest font-extrabold">SYSTEM NOTICE</span>
-                  <p className="text-xs text-slate-100 font-bold mt-0.5">{toastMessage.text}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Tab Content Display Switch */}
-            <div className="transition-all duration-300">
-              {activeTab === 'dashboard' && (
+        {/* Layout Navigation Render Switch */}
+        <div className="transition-all duration-300">
+          
+          {/* Main Tab 1: Dashboard View */}
+          {mainTab === 'dashboard' && (
+            <>
+              {dashboardSubTab === 'security' && (
                 <Dashboard
                   extinguishers={extinguishers}
                   boats={boats}
                   onSelectBoat={handleSelectBoat}
                   onSelectExtinguisher={(ext) => {
                     setInspectingExt(ext);
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
                   }}
                   onOpenQuickScan={() => {
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
                     handleSelectBoat(null);
                   }}
                   lifeJackets={lifeJackets}
                   licenses={boatLicenses}
                   medicalStations={medicalStations}
                   onNavigateTab={(tab) => {
-                    setActiveTab(tab);
+                    setMainTab('forms');
+                    if (tab === 'boats') setFormsSubTab('extinguishers');
+                    else if (tab === 'lifejackets') setFormsSubTab('lifejackets');
+                    else if (tab === 'licenses') setFormsSubTab('licenses');
                   }}
                   onNavigateModule={(module) => {
-                    setAppModule(module);
-                  }}
-                  onRestoreData={(restoredData) => {
-                    if (restoredData.extinguishers) setExtinguishers(restoredData.extinguishers);
-                    if (restoredData.boats) setBoats(restoredData.boats);
-                    if (restoredData.lifeJackets) setLifeJackets(restoredData.lifeJackets);
-                    if (restoredData.licenses) setBoatLicenses(restoredData.licenses);
-                    if (restoredData.medicalStations) setMedicalStations(restoredData.medicalStations);
+                    setMainTab('dashboard');
+                    if (module === 'medical') setDashboardSubTab('medical');
+                    else if (module === 'maintenance') setDashboardSubTab('maintenance');
                   }}
                 />
               )}
 
-              {activeTab === 'boats' && (
+              {dashboardSubTab === 'vessel-summary' && (
+                <Dashboard
+                  extinguishers={extinguishers}
+                  boats={boats}
+                  onSelectBoat={handleSelectBoat}
+                  onSelectExtinguisher={(ext) => {
+                    setInspectingExt(ext);
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
+                  }}
+                  onOpenQuickScan={() => {
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
+                    handleSelectBoat(null);
+                  }}
+                  lifeJackets={lifeJackets}
+                  licenses={boatLicenses}
+                  medicalStations={medicalStations}
+                  onNavigateTab={(tab) => {
+                    setMainTab('forms');
+                    if (tab === 'boats') setFormsSubTab('extinguishers');
+                    else if (tab === 'lifejackets') setFormsSubTab('lifejackets');
+                    else if (tab === 'licenses') setFormsSubTab('licenses');
+                  }}
+                  onNavigateModule={(module) => {
+                    setMainTab('dashboard');
+                    if (module === 'medical') setDashboardSubTab('medical');
+                    else if (module === 'maintenance') setDashboardSubTab('maintenance');
+                  }}
+                  viewMode="summary-only"
+                />
+              )}
+
+              {dashboardSubTab === 'extinguisher-map' && (
+                <Dashboard
+                  extinguishers={extinguishers}
+                  boats={boats}
+                  onSelectBoat={handleSelectBoat}
+                  onSelectExtinguisher={(ext) => {
+                    setInspectingExt(ext);
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
+                  }}
+                  onOpenQuickScan={() => {
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
+                    handleSelectBoat(null);
+                  }}
+                  lifeJackets={lifeJackets}
+                  licenses={boatLicenses}
+                  medicalStations={medicalStations}
+                  onNavigateTab={(tab) => {
+                    setMainTab('forms');
+                    if (tab === 'boats') setFormsSubTab('extinguishers');
+                    else if (tab === 'lifejackets') setFormsSubTab('lifejackets');
+                    else if (tab === 'licenses') setFormsSubTab('licenses');
+                  }}
+                  onNavigateModule={(module) => {
+                    setMainTab('dashboard');
+                    if (module === 'medical') setDashboardSubTab('medical');
+                    else if (module === 'maintenance') setDashboardSubTab('maintenance');
+                  }}
+                  viewMode="map-only"
+                />
+              )}
+
+              {dashboardSubTab === 'lifejacket-map' && (
+                <Dashboard
+                  extinguishers={extinguishers}
+                  boats={boats}
+                  onSelectBoat={handleSelectBoat}
+                  onSelectExtinguisher={(ext) => {
+                    setInspectingExt(ext);
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
+                  }}
+                  onOpenQuickScan={() => {
+                    setMainTab('forms');
+                    setFormsSubTab('extinguishers');
+                    handleSelectBoat(null);
+                  }}
+                  lifeJackets={lifeJackets}
+                  licenses={boatLicenses}
+                  medicalStations={medicalStations}
+                  onNavigateTab={(tab) => {
+                    setMainTab('forms');
+                    if (tab === 'boats') setFormsSubTab('extinguishers');
+                    else if (tab === 'lifejackets') setFormsSubTab('lifejackets');
+                    else if (tab === 'licenses') setFormsSubTab('licenses');
+                  }}
+                  onNavigateModule={(module) => {
+                    setMainTab('dashboard');
+                    if (module === 'medical') setDashboardSubTab('medical');
+                    else if (module === 'maintenance') setDashboardSubTab('maintenance');
+                  }}
+                  viewMode="lifejacket-map"
+                />
+              )}
+
+              {dashboardSubTab === 'medical' && (
+                <MedicalSection
+                  stations={medicalStations}
+                  onSaveInspection={handleSaveMedicalInspection}
+                  onDeleteInspection={handleDeleteMedicalInspection}
+                  history={medicalHistory}
+                  activeSubTab="dashboard"
+                />
+              )}
+
+              {dashboardSubTab === 'maintenance' && (
+                <MaintenanceSection
+                  records={maintenanceRecords}
+                  onSaveRecord={handleSaveMaintenanceRecord}
+                  onDeleteRecord={handleDeleteMaintenanceRecord}
+                  onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus}
+                  onUpdateRecord={handleUpdateMaintenanceRecord}
+                  isSyncing={isSyncing}
+                  showOnly="dashboard"
+                />
+              )}
+
+              {dashboardSubTab === 'executive-report' && (
+                <ExecutiveSummaryReport
+                  boats={boats}
+                  extinguishers={extinguishers}
+                  extinguisherHistory={history}
+                  medicalStations={medicalStations}
+                  medicalHistory={medicalHistory}
+                  licenses={boatLicenses}
+                  licenseHistory={licenseHistory}
+                  lifeJackets={lifeJackets}
+                  lifeJacketHistory={lifeJacketHistory}
+                />
+              )}
+            </>
+          )}
+
+          {/* Main Tab 2: Operational Forms & Audit Lists */}
+          {mainTab === 'forms' && (
+            <>
+              {formsSubTab === 'extinguishers' && (
                 <BoatList
                   selectedBoatId={selectedBoatId}
                   boats={boats}
@@ -1735,7 +1863,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'lifejackets' && (
+              {formsSubTab === 'lifejackets' && (
                 <LifeJacketSection
                   jackets={lifeJackets}
                   history={lifeJacketHistory}
@@ -1744,7 +1872,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'licenses' && (
+              {formsSubTab === 'licenses' && (
                 <LicenseSection
                   licenses={boatLicenses}
                   history={licenseHistory}
@@ -1753,7 +1881,28 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'history' && (
+              {formsSubTab === 'medical' && (
+                <MedicalSection
+                  stations={medicalStations}
+                  onSaveInspection={handleSaveMedicalInspection}
+                  onDeleteInspection={handleDeleteMedicalInspection}
+                  history={medicalHistory}
+                  activeSubTab="forms"
+                />
+              )}
+
+              {formsSubTab === 'maintenance' && (
+                <MaintenanceSection
+                  records={maintenanceRecords}
+                  onSaveRecord={handleSaveMaintenanceRecord}
+                  onDeleteRecord={handleDeleteMaintenanceRecord}
+                  onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus}
+                  isSyncing={isSyncing}
+                  showOnly="records"
+                />
+              )}
+
+              {formsSubTab === 'history' && (
                 <HistoryLog 
                   extinguisherHistory={history} 
                   lifeJacketHistory={lifeJacketHistory}
@@ -1761,80 +1910,25 @@ export default function App() {
                   medicalHistory={medicalHistory}
                   onClearHistory={handleClearHistory} 
                   onDeleteRecord={handleDeleteUnifiedRecord}
+                  onAddRectificationPhoto={handleAddRectificationPhoto}
+                  onShowConfirm={showConfirm}
                 />
               )}
-            </div>
-          </main>
-        </>
-      ) : appModule === 'medical' ? (
-        <>
-          {/* Main Medical Module Container */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full relative">
-            
-            {/* Toast Notification Box */}
-            {toastMessage && (
-              <div className="fixed bottom-6 right-6 md:right-8 bg-slate-950 text-white rounded-sm border-2 border-slate-900 p-4 shadow-2xl z-50 animate-fade-in flex items-center gap-3 max-w-sm">
-                <div className={`p-2 rounded-sm shrink-0 border ${
-                  toastMessage.type === 'success' 
-                    ? 'bg-green-500/10 text-green-400 border-green-500/20' 
-                    : toastMessage.type === 'error' 
-                    ? 'bg-red-500/10 text-red-400 border-red-500/20' 
-                    : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                }`}>
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-500 block uppercase font-mono tracking-widest font-extrabold">SYSTEM NOTICE</span>
-                  <p className="text-xs text-slate-100 font-bold mt-0.5">{toastMessage.text}</p>
-                </div>
-              </div>
-            )}
 
-            <MedicalSection
-              stations={medicalStations}
-              onSaveInspection={handleSaveMedicalInspection}
-              onDeleteInspection={handleDeleteMedicalInspection}
-              history={medicalHistory}
-            />
-          </main>
-        </>
-      ) : (
-        <>
-          {/* Main Maintenance Module Container */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full relative">
-            
-            {/* Toast Notification Box */}
-            {toastMessage && (
-              <div className="fixed bottom-6 right-6 md:right-8 bg-slate-950 text-white rounded-sm border-2 border-slate-900 p-4 shadow-2xl z-50 animate-fade-in flex items-center gap-3 max-w-sm">
-                <div className={`p-2 rounded-sm shrink-0 border ${
-                  toastMessage.type === 'success' 
-                    ? 'bg-green-500/10 text-green-400 border-green-500/20' 
-                    : toastMessage.type === 'error' 
-                    ? 'bg-red-500/10 text-red-400 border-red-500/20' 
-                    : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                }`}>
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-500 block uppercase font-mono tracking-widest font-extrabold">SYSTEM NOTICE</span>
-                  <p className="text-xs text-slate-100 font-bold mt-0.5">{toastMessage.text}</p>
-                </div>
-              </div>
-            )}
-
-            <MaintenanceSection
-              records={maintenanceRecords}
-              onSaveRecord={handleSaveMaintenanceRecord}
-              onDeleteRecord={handleDeleteMaintenanceRecord}
-              onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus}
-              isSyncing={isSyncing}
-            />
-          </main>
-        </>
-      )}
+              {formsSubTab === 'extinguisher-report' && (
+                <ExtinguisherReport 
+                  extinguishers={extinguishers}
+                  boats={boats}
+                />
+              )}
+            </>
+          )}
+          
+        </div>
+      </main>
 
       {/* Primary Inspection Modal */}
-      {inspectingExt && appModule === 'security' && (
+      {inspectingExt && (
         <InspectionForm
           extinguisher={inspectingExt}
           defaultInspectorName={user?.displayName || user?.email || ''}
@@ -1843,11 +1937,51 @@ export default function App() {
         />
       )}
 
+      {/* Custom Delete Confirmation Modal */}
+      {confirmDelete && confirmDelete.isOpen && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="max-w-md w-full bg-white border-2 border-slate-900 p-6 shadow-2xl rounded-2xl animate-scale-up">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg shrink-0">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-slate-950 tracking-tight">
+                  {confirmDelete.title}
+                </h3>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                  {confirmDelete.message}
+                </p>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 bg-white hover:bg-slate-200 text-slate-950 border border-slate-300 rounded-lg text-sm font-semibold transition-all cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmDelete.onConfirm();
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-sm font-semibold shadow-lg shadow-rose-600/20 transition-all cursor-pointer"
+              >
+                ยืนยันการลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Humble Elegant Footer Footer */}
-      <footer className="bg-slate-900 border-t border-slate-800 py-6 mt-12 shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between text-xs text-slate-400 gap-4">
+      <footer className="bg-white border-t-2 border-slate-300 py-6 mt-12 shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between text-xs text-slate-600 gap-4">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4.5 w-4.5 text-blue-500" />
+            <ShieldCheck className="h-4.5 w-4.5 text-blue-600" />
             <span>Chao Phraya Tourist Boat Co., Ltd. &copy; 2026. ระบบความปลอดภัยท่าเรือและเรือท่องเที่ยวแม่น้ำ</span>
           </div>
           <div className="space-x-4">

@@ -17,17 +17,17 @@ export interface Pier {
 }
 
 export const PIERS: Pier[] = [
-  { id: 'pier-7', name: 'ท่าพระอาทิตย์ (Phra Arthit)', locationSpec: 'เคาน์เตอร์รับตั๋วบริเวณทางออกสู่ถนนใหญ่' },
-  { id: 'pier-8', name: 'ท่าศิริราช-พรานนก (Prannok)', locationSpec: 'ตู้นายท่าดูแลรักษาความปลอดภัยท่าพรานนก' },
-  { id: 'pier-9', name: 'ท่ามหาราช (Maharaj)', locationSpec: 'เคาน์เตอร์จำหน่ายบัตรประจำท่ามหาราช' },
-  { id: 'pier-6', name: 'ท่าช้าง (Tha Chang)', locationSpec: 'โต๊ะเจ้าหน้าที่ประสานงานเขตท่าเรือหลัก' },
-  { id: 'pier-5', name: 'ท่าเตียน (Tha Tien)', locationSpec: 'จุดแนะแนวนักท่องเที่ยวและจำหน่ายบัตร' },
-  { id: 'pier-4', name: 'ท่าวัดอรุณ (Wat Arun)', locationSpec: 'ซุ้มจองตั๋วเรือด่วนใกล้ทางเข้าหลัก' },
-  { id: 'pier-10', name: 'ท่าราชินี (Rajinee)', locationSpec: 'ห้องบริการข้อมูลผู้โดยสารสถานีท่าราชินี' },
-  { id: 'pier-3', name: 'ท่าราชวงศ์ (Ratchawong)', locationSpec: 'สำนักงานพนักงานควบคุมเรือประจำท่า' },
-  { id: 'pier-2', name: 'ท่าไอคอนสยาม (ICONSIAM)', locationSpec: 'เคาน์เตอร์จำหน่ายตั๋วเรือฝั่งไอคอนสยาม' },
-  { id: 'pier-1', name: 'ท่าสาทร (Sathorn)', locationSpec: 'ห้องปฐมพยาบาลหลัก / ศูนย์บริการลูกค้า' },
-  { id: 'pier-11', name: 'ท่าเอเชียทีค (Asiatique)', locationSpec: 'ตู้จำหน่ายตั๋วเรือท่องเที่ยวบริเวณเอเชียทีค' },
+  { id: 'pier-7', name: 'ท่าพระอาทิตย์ (Phra Arthit)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-8', name: 'ท่าศิริราช-พรานนก (Prannok)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-9', name: 'ท่ามหาราช (Maharaj)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-6', name: 'ท่าช้าง (Tha Chang)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-5', name: 'ท่าเตียน (Tha Tien)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-4', name: 'ท่าวัดอรุณ (Wat Arun)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-10', name: 'ท่าราชินี (Rajinee)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-3', name: 'ท่าราชวงศ์ (Ratchawong)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-2', name: 'ท่าไอคอนสยาม (ICONSIAM)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-1', name: 'ท่าสาทร (Sathorn)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
+  { id: 'pier-11', name: 'ท่าเอเชียทีค (Asiatique)', locationSpec: 'จุดขายตั๋วและบริการลูกค้า' },
 ];
 
 export const generateInitialMedicalStations = (): MedicalKitStation[] => {
@@ -69,6 +69,7 @@ export const generateInitialMedicalStations = (): MedicalKitStation[] => {
       lastInspectedDate = '2026-06-20';
       lastInspector = 'สมชาย นาวาดี';
       overallStatus = 'Pass';
+      ammoniaExpiry = '2026-08-05'; // Near expiry! (Less than 2 months from July 8, 2026)
     } else if (idx === 1) { // CTB2
       lastInspectedDate = '2026-06-19';
       lastInspector = 'วิชัย รักเรือ';
@@ -83,7 +84,7 @@ export const generateInitialMedicalStations = (): MedicalKitStation[] => {
       stationType: 'boat',
       targetId: boat.id,
       targetName: boat.name,
-      location: 'เคาน์เตอร์บริการผู้โดยสาร / ชั้นล่าง',
+      location: 'จุดขายตั๋วและบริการลูกค้า',
       paracetamolStatus,
       paracetamolExpiry,
       motionSicknessStatus,
@@ -263,6 +264,11 @@ export const generateInitialExtinguishers = (): FireExtinguisher[] => {
         overallStatus = 'Pass';
       }
 
+      let extExpiryDate = '2029-06-30';
+      if (boat.id === 'boat-1' && lIdx === 1) {
+        extExpiryDate = '2026-08-20'; // Near expiry! (Less than 2 months from July 8, 2026)
+      }
+
       // Create extinguisher object
       list.push({
         id: extId,
@@ -279,7 +285,7 @@ export const generateInitialExtinguishers = (): FireExtinguisher[] => {
         lastInspectedDate,
         lastInspector,
         overallStatus,
-        expiryDate: '2029-06-30', // expiry roughly 3 years from now
+        expiryDate: extExpiryDate,
         remarks,
       });
     });
@@ -384,7 +390,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'อู่เรือ (ช่างแอร์)',
       status: 'ดำเนินการแล้ว' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/cabin_ac_maintenance.jpg'],
-      partRepaired: 'เครื่องปรับอากาศ'
+      partRepaired: 'เครื่องปรับอากาศ',
+      cost: 1500
     },
     {
       id: 'MAINREC-002',
@@ -401,7 +408,8 @@ export const generateInitialMaintenanceRecords = () => {
         'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/boat_engine_repair.jpg', 
         'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/marine_alternator_coupling.jpg'
       ],
-      partRepaired: 'ไดชาร์จ / ไดสตาร์ท'
+      partRepaired: 'ไดชาร์จ / ไดสตาร์ท',
+      cost: 18500
     },
     {
       id: 'MAINREC-003',
@@ -418,7 +426,8 @@ export const generateInitialMaintenanceRecords = () => {
         'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/marine_alternator_coupling.jpg', 
         'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/boat_engine_repair.jpg'
       ],
-      partRepaired: 'ยอยและแท่นเครื่อง'
+      partRepaired: 'ยอยและแท่นเครื่อง',
+      cost: 24000
     },
     {
       id: 'MAINREC-004',
@@ -432,7 +441,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'ช่างประจำเรือ',
       status: 'ดำเนินการแล้ว' as const,
       photos: [],
-      partRepaired: 'ทั่วไป (ตรวจเช็ค)'
+      partRepaired: 'ทั่วไป (ตรวจเช็ค)',
+      cost: 0
     },
     {
       id: 'MAINREC-005',
@@ -446,7 +456,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'อู่เรือ (ช่างตัวเรือ)',
       status: 'ดำเนินการแล้ว' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/shipyard_hull_work.jpg'],
-      partRepaired: 'ตัวเรือ / โครงสร้างหลังคา'
+      partRepaired: 'ตัวเรือ / โครงสร้างหลังคา',
+      cost: 4500
     },
     {
       id: 'MAINREC-006',
@@ -460,7 +471,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'ช่างประจำเรือ',
       status: 'ดำเนินการแล้ว' as const,
       photos: [],
-      partRepaired: 'ทั่วไป (ตรวจเช็ค)'
+      partRepaired: 'ทั่วไป (ตรวจเช็ค)',
+      cost: 0
     },
     {
       id: 'MAINREC-007',
@@ -474,7 +486,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'อู่เรือ',
       status: 'กำลังดำเนินการ' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/boat_engine_repair.jpg'],
-      partRepaired: 'ยอยและแท่นเครื่อง'
+      partRepaired: 'ยอยและแท่นเครื่อง',
+      cost: 12000
     },
     {
       id: 'MAINREC-008',
@@ -488,21 +501,23 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'อู่เรือ (ช่างแอร์)',
       status: 'ดำเนินการแล้ว' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/cabin_ac_maintenance.jpg'],
-      partRepaired: 'เครื่องปรับอากาศ'
+      partRepaired: 'เครื่องปรับอากาศ',
+      cost: 3200
     },
     {
       id: 'MAINREC-009',
       dateReported: '2026-04-18',
       timeReported: '14:30',
       boatId: 'boat-4',
-      boatName: 'CTB 4',
+      boatName: 'R1',
       type: 'ส่งซ่อม',
       details: 'หัวฉีดเครื่องยนต์ฝั่งขวาตัน มีควันดำ',
       actionTaken: 'ส่งล้างหัวฉีดเครื่องยนต์ และดำเนินการประกอบกลับ เปลี่ยนแหวนทองแดงหัวฉีด ทดสอบวิ่งควันเป็นปกติ',
       responsiblePerson: 'อู่เรือ (ช่างกล)',
       status: 'ดำเนินการแล้ว' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/boat_engine_repair.jpg'],
-      partRepaired: 'เครื่องยนต์'
+      partRepaired: 'เครื่องยนต์',
+      cost: 8500
     },
     {
       id: 'MAINREC-010',
@@ -516,7 +531,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'อู่เรือ (ช่างไฟฟ้า)',
       status: 'ดำเนินการแล้ว' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/marine_alternator_coupling.jpg'],
-      partRepaired: 'ระบบสุขาภิบาล / ปั๊มน้ำ'
+      partRepaired: 'ระบบสุขาภิบาล / ปั๊มน้ำ',
+      cost: 1800
     },
     {
       id: 'MAINREC-011',
@@ -530,7 +546,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'อู่เรือ (ช่างสี)',
       status: 'ดำเนินการแล้ว' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/shipyard_hull_work.jpg'],
-      partRepaired: 'ตัวเรือ / โครงสร้างหลังคา'
+      partRepaired: 'ตัวเรือ / โครงสร้างหลังคา',
+      cost: 25000
     },
     {
       id: 'MAINREC-012',
@@ -544,7 +561,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'ช่างประจำเรือ',
       status: 'ดำเนินการแล้ว' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/marine_alternator_coupling.jpg'],
-      partRepaired: 'ไดชาร์จ / ไดสตาร์ท'
+      partRepaired: 'ไดชาร์จ / ไดสตาร์ท',
+      cost: 4800
     },
     {
       id: 'MAINREC-013',
@@ -558,7 +576,8 @@ export const generateInitialMaintenanceRecords = () => {
       responsiblePerson: 'อู่เรือ (ช่างแอร์)',
       status: 'กำลังดำเนินการ' as const,
       photos: ['https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/cabin_ac_maintenance.jpg'],
-      partRepaired: 'เครื่องปรับอากาศ'
+      partRepaired: 'เครื่องปรับอากาศ',
+      cost: 1200
     }
   ];
 };

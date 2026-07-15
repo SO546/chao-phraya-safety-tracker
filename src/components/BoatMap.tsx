@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Boat, FireExtinguisher } from '../types';
 import { ShieldCheck, AlertCircle, HelpCircle, Flame, Edit, CornerDownRight } from 'lucide-react';
 
-import ctbLayoutImg from '../../Image/Layout_CTB_Boat.jpg';
-import rLayoutImg from '../../Image/Layout_R_Boat.png';
+const ctbLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/ctb_boat_layout.jpg';
+const rLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/r_boat_layout.jpg';
 
 interface BoatMapProps {
   boat: Boat;
@@ -17,6 +17,17 @@ export default function BoatMap({
   onInspectExtinguisher,
 }: BoatMapProps) {
   const [hoveredExt, setHoveredExt] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Load custom pins coordinates from localStorage
+  const [customPins, setCustomPins] = useState<Record<string, Record<number, { x: number; y: number }>>>(() => {
+    try {
+      const saved = localStorage.getItem('boat_extinguisher_pins');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
 
   // Filter extinguishers for the current boat
   const boatExts = extinguishers.filter((e) => e.boatId === boat.id);
@@ -85,11 +96,132 @@ export default function BoatMap({
         },
       ];
 
+  const getPinPos = (idx: number, defaultPos: { x: number; y: number }) => {
+    const boatKey = boat.id;
+    if (customPins[boatKey] && customPins[boatKey][idx]) {
+      return customPins[boatKey][idx];
+    }
+    return defaultPos;
+  };
+
+  const handleResetPins = () => {
+    setCustomPins((prev) => {
+      const next = { ...prev };
+      delete next[boat.id];
+      localStorage.setItem('boat_extinguisher_pins', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Mouse drag handler for Fire Extinguisher pins
+  const handleMouseDown = (idx: number, extData: FireExtinguisher, e: React.MouseEvent) => {
+    e.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let hasDragged = false;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+        hasDragged = true;
+      }
+
+      const x = moveEvent.clientX - rect.left;
+      const y = moveEvent.clientY - rect.top;
+      
+      const xPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      const yPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
+
+      setCustomPins((prev) => {
+        const boatKey = boat.id;
+        const next = {
+          ...prev,
+          [boatKey]: {
+            ...(prev[boatKey] || {}),
+            [idx]: { x: parseFloat(xPercent.toFixed(2)), y: parseFloat(yPercent.toFixed(2)) },
+          },
+        };
+        localStorage.setItem('boat_extinguisher_pins', JSON.stringify(next));
+        return next;
+      });
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+
+      if (!hasDragged) {
+        handlePinClick(extData);
+      }
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Touch drag handler for Fire Extinguisher pins (mobile friendly)
+  const handleTouchStart = (idx: number, extData: FireExtinguisher, e: React.TouchEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const touchStart = e.touches[0];
+    const startX = touchStart.clientX;
+    const startY = touchStart.clientY;
+    let hasDragged = false;
+
+    const onTouchMove = (moveEvent: TouchEvent) => {
+      if (moveEvent.cancelable) {
+        moveEvent.preventDefault();
+      }
+      const touch = moveEvent.touches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+        hasDragged = true;
+      }
+
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      
+      const xPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      const yPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
+
+      setCustomPins((prev) => {
+        const boatKey = boat.id;
+        const next = {
+          ...prev,
+          [boatKey]: {
+            ...(prev[boatKey] || {}),
+            [idx]: { x: parseFloat(xPercent.toFixed(2)), y: parseFloat(yPercent.toFixed(2)) },
+          },
+        };
+        localStorage.setItem('boat_extinguisher_pins', JSON.stringify(next));
+        return next;
+      });
+    };
+
+    const onTouchEnd = () => {
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+
+      if (!hasDragged) {
+        handlePinClick(extData);
+      }
+    };
+
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pass':
         return {
-          bg: 'bg-green-500 hover:bg-green-600',
+          bg: 'bg-green-500 hover:bg-green-600 animate-pulse',
           ring: 'ring-green-300',
           text: 'text-green-600',
           border: 'border-green-500',
@@ -129,16 +261,25 @@ export default function BoatMap({
   };
 
   return (
-    <div className="bg-white border-2 border-slate-200 rounded p-5 space-y-4" id={`boat-map-${boat.id}`}>
+    <div className="bg-white border-2 border-slate-300 rounded p-5 space-y-4" id={`boat-map-${boat.id}`}>
       {/* Header */}
-      <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+      <div className="flex justify-between items-center pb-3 border-b border-slate-300 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 bg-blue-600 rounded-full animate-ping" />
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+          <h3 className="text-sm font-bold text-slate-950 uppercase tracking-tight">
             แผนผังจุดติดตั้งถังดับเพลิงประจำเรือ (Fire Extinguisher Installation Map)
           </h3>
+          {Object.keys(customPins[boat.id] || {}).length > 0 && (
+            <button
+              onClick={handleResetPins}
+              className="ml-2 text-[9px] font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded cursor-pointer transition-all"
+              title="รีเซ็ตพิกัดตำแหน่งถังทั้งหมดของเรือลำนี้"
+            >
+              🔄 รีเซ็ตจุดถังดับเพลิง
+            </button>
+          )}
         </div>
-        <div className="flex gap-4 text-[10px] borer-l pl-4 border-slate-200 font-mono">
+        <div className="flex gap-4 text-[10px] borer-l pl-4 border-slate-300 font-mono">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 bg-green-500 rounded-full inline-block" />
             <span className="text-slate-600 font-bold">ผ่าน (PASS)</span>
@@ -158,13 +299,13 @@ export default function BoatMap({
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* Interactive Schematic Area - 3 Cols */}
-        <div className="lg:col-span-3 relative bg-slate-900 overflow-hidden rounded-md border border-slate-950 p-4 flex flex-col justify-between shadow-inner select-none">
+        <div className="lg:col-span-3 relative bg-white overflow-hidden rounded-md border border-slate-950 p-4 flex flex-col justify-between shadow-inner select-none">
           
           {/* Deck indicator details */}
-          <div className="absolute top-3 left-3 text-[10px] text-slate-450 font-mono uppercase bg-slate-950/90 backdrop-blur-xs px-2 py-0.5 rounded border border-slate-800 z-10 transition-opacity">
+          <div className="absolute top-3 left-3 text-[10px] text-slate-450 font-mono uppercase bg-slate-50/90 backdrop-blur-xs px-2 py-0.5 rounded border border-slate-300 z-10 transition-opacity">
             กราบซ้าย (Port / Left Side)
           </div>
-          <div className="absolute bottom-3 left-3 text-[10px] text-slate-450 font-mono uppercase bg-slate-950/90 backdrop-blur-xs px-2 py-0.5 rounded border border-slate-800 z-10 transition-opacity">
+          <div className="absolute bottom-3 left-3 text-[10px] text-slate-450 font-mono uppercase bg-slate-50/90 backdrop-blur-xs px-2 py-0.5 rounded border border-slate-300 z-10 transition-opacity">
             กราบขวา (Starboard / Right Side)
           </div>
 
@@ -177,7 +318,10 @@ export default function BoatMap({
 
           {/* Floor plan layout from precise uploaded floor-plan design drawings */}
           <div className="flex-1 flex items-center justify-center relative w-full h-full py-4 min-h-[240px]">
-            <div className="relative w-full max-w-[850px] aspect-[1000/420] bg-white rounded border-2 border-slate-800 overflow-hidden shadow-2xl">
+            <div 
+              ref={containerRef}
+              className="relative w-full max-w-[850px] aspect-[1000/420] bg-white rounded border-2 border-slate-300 overflow-hidden shadow-2xl"
+            >
               <img
                 src={layoutImg}
                 alt={`${boat.name} Floor Plan Diagram`}
@@ -198,12 +342,13 @@ export default function BoatMap({
 
                 const colors = getStatusColor(extData.overallStatus);
                 const isHovered = hoveredExt === extData.id;
+                const activePos = getPinPos(idx, pos);
 
                 return (
                   <div
                     key={extData.id}
                     className="absolute"
-                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                    style={{ left: `${activePos.x}%`, top: `${activePos.y}%` }}
                   >
                     {/* Glowing halo when hovered */}
                     <div
@@ -219,11 +364,12 @@ export default function BoatMap({
 
                     {/* Pin Dot Button */}
                     <button
-                      onClick={() => handlePinClick(extData)}
+                      onMouseDown={(e) => handleMouseDown(idx, extData, e)}
+                      onTouchStart={(e) => handleTouchStart(idx, extData, e)}
                       onMouseEnter={() => setHoveredExt(extData.id)}
                       onMouseLeave={() => setHoveredExt(null)}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full ${colors.bg} text-white font-mono font-black text-xs border-2 border-slate-900 flex items-center justify-center shadow-lg cursor-pointer transform hover:scale-110 active:scale-95 transition-all duration-150 ring-2 ${colors.ring}`}
-                      title={pos.desc}
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full ${colors.bg} text-slate-950 font-mono font-black text-xs border-2 border-slate-900 flex items-center justify-center shadow-lg cursor-move transform hover:scale-110 active:scale-95 transition-all duration-150 ring-2 ${colors.ring}`}
+                      title={`${pos.desc} (ลากเพื่อปรับตำแหน่งได้)`}
                       id={`map-pin-${extData.id}`}
                     >
                       {idx + 1}
@@ -231,34 +377,34 @@ export default function BoatMap({
 
                     {/* Dynamic Tooltip */}
                     <div
-                      className={`absolute bottom-6 left-12 -translate-x-1/2 md:translate-x-0 w-52 md:w-60 bg-slate-950/95 backdrop-blur-md text-white p-3 rounded border border-slate-750 shadow-xl z-55 space-y-2 pointer-events-none transition-all duration-200 origin-bottom ${
+                      className={`absolute bottom-6 left-12 -translate-x-1/2 md:translate-x-0 w-52 md:w-60 bg-slate-50/95 backdrop-blur-md text-slate-950 p-3 rounded border border-slate-300 shadow-xl z-55 space-y-2 pointer-events-none transition-all duration-200 origin-bottom ${
                         isHovered ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-90 pointer-events-none'
                       }`}
                     >
                       <div className="flex justify-between items-start">
                         <div>
                           <div className="text-[10px] font-bold text-slate-450 tracking-wider">ถังลำดับที่ {idx + 1}</div>
-                          <div className="font-bold text-xs truncate max-w-[130px] font-mono text-cyan-400">
+                          <div className="font-bold text-xs truncate max-w-[130px] font-mono text-cyan-700">
                             {extData.id}
                           </div>
                         </div>
                         <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-sm border uppercase ${
                           extData.overallStatus === 'Pass' 
-                            ? 'bg-green-950/90 text-green-400 border-green-800' 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
                             : extData.overallStatus === 'Fail'
-                            ? 'bg-red-950/90 text-red-400 border-red-800'
-                            : 'bg-amber-950/90 text-amber-400 border-amber-800'
+                            ? 'bg-rose-50 text-rose-700 border-rose-300'
+                            : 'bg-amber-50/90 text-amber-700 border-amber-800'
                         }`}>
                           {extData.overallStatus === 'Pass' ? 'ผ่านเกณฑ์' : extData.overallStatus === 'Fail' ? 'พบค้างซ่อม' : 'ค้างตรวจ'}
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-slate-200 border-t border-slate-800 pt-1.5">
+                      <div className="text-[11px] text-slate-950 border-t border-slate-300 pt-1.5">
                         <span className="text-slate-450 block text-[9px] uppercase font-bold tracking-wider">ตำแหน่งติดตั้งด้านจริง</span>
-                        <strong className="block text-white leading-normal mt-0.5">{extData.location}</strong>
+                        <strong className="block text-slate-950 leading-normal mt-0.5">{extData.location}</strong>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-300">
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-700">
                         <div>
                           <span className="text-slate-450 block text-[8px] uppercase font-bold">ชนิดถัง</span>
                           <span className="font-semibold block">{mapTypeToThai(extData.type)}</span>
@@ -270,7 +416,7 @@ export default function BoatMap({
                       </div>
 
                       <div className="text-[9px] text-slate-450 text-right italic font-mono pt-1">
-                        *คลิกที่ปุ่มเพื่อแก้ไขการตรวจเช็คนี้
+                        *ลากเพื่อปรับพิกัด หรือคลิกเพื่อแก้ไขการตรวจเช็คนี้
                       </div>
                     </div>
                   </div>
@@ -278,10 +424,13 @@ export default function BoatMap({
               })}
             </div>
           </div>
+          <div className="text-[9.5px] text-slate-500 text-center italic mt-1 font-sans">
+            💡 ท่านสามารถลากปุ่มหมายเลขถังดับเพลิงเพื่อจัดขยับตำแหน่งบนผังเรือได้อย่างอิสระตามหน้าจริง
+          </div>
         </div>
 
         {/* Informative Side Panel - 1 Col */}
-        <div className="lg:col-span-1 bg-slate-50 rounded border border-slate-200 p-4 flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-1 bg-white rounded border border-slate-300 p-4 flex flex-col justify-between space-y-4">
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest font-mono">
               ข้อมูลแผนผังประจำโครงสร้าง
@@ -307,10 +456,10 @@ export default function BoatMap({
                     className={`flex items-start gap-2 p-2 rounded border transition-all cursor-pointer ${
                       isItemHovered
                         ? 'bg-blue-50 border-blue-300 text-blue-900 shadow-xs'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="w-5 h-5 flex-shrink-0 bg-slate-900 text-white rounded-full font-mono text-xs font-black flex items-center justify-center">
+                    <span className="w-5 h-5 flex-shrink-0 bg-white text-slate-950 rounded-full font-mono text-xs font-black flex items-center justify-center">
                       {idx + 1}
                     </span>
                     <div className="space-y-0.5 min-w-0">
@@ -336,7 +485,7 @@ export default function BoatMap({
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-450 border-t border-slate-200 pt-3 italic space-y-1">
+          <div className="text-[10px] text-slate-450 border-t border-slate-300 pt-3 italic space-y-1">
             <span className="block font-bold">💡 ข้อแนะนำสำหรับเจ้าหน้าที่:</span>
             <span className="block leading-relaxed">
               สามารถกดจิ้มที่ตัวหมายเลขถังในภาพร่างแบบ เรือ หรือบนรายการด้านสลัก เพื่อลงบันทึกการตรวจสอบได้ทันที

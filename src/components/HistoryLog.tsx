@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   ArrowUpDown, 
   ShieldCheck, 
@@ -15,7 +16,9 @@ import {
   HeartPulse,
   FileText,
   Eye,
-  ChevronDown
+  ChevronDown,
+  ImagePlus,
+  Camera
 } from 'lucide-react';
 import { 
   InspectionRecord, 
@@ -31,6 +34,8 @@ interface HistoryLogProps {
   medicalHistory?: MedicalInspectionRecord[];
   onClearHistory: (category: 'all' | 'extinguisher' | 'lifejacket' | 'license' | 'medical') => void;
   onDeleteRecord?: (id: string, category: 'extinguisher' | 'lifejacket' | 'license' | 'medical') => void;
+  onAddRectificationPhoto?: (id: string, category: 'extinguisher' | 'lifejacket' | 'license' | 'medical', photoUrl: string) => void;
+  onShowConfirm?: (title: string, message: string, onConfirm: () => void) => void;
 }
 
 export default function HistoryLog({ 
@@ -39,7 +44,9 @@ export default function HistoryLog({
   licenseHistory = [], 
   medicalHistory = [],
   onClearHistory,
-  onDeleteRecord
+  onDeleteRecord,
+  onAddRectificationPhoto,
+  onShowConfirm
 }: HistoryLogProps) {
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'extinguisher' | 'lifejacket' | 'license' | 'medical'>('all');
   const [boatFilter, setBoatFilter] = useState('all');
@@ -79,6 +86,7 @@ export default function HistoryLog({
     status: 'Pass' | 'Fail';
     remarks: string;
     photoUrl?: string;
+    rectificationPhotoUrl?: string;
     raw: any;
   }
 
@@ -92,6 +100,7 @@ export default function HistoryLog({
     status: item.overallStatus,
     remarks: item.remarks,
     photoUrl: item.photoUrl,
+    rectificationPhotoUrl: item.rectificationPhotoUrl,
     raw: item
   }));
 
@@ -105,6 +114,7 @@ export default function HistoryLog({
     status: item.overallStatus,
     remarks: item.remarks,
     photoUrl: item.photoUrl,
+    rectificationPhotoUrl: item.rectificationPhotoUrl,
     raw: item
   }));
 
@@ -118,6 +128,7 @@ export default function HistoryLog({
     status: item.overallStatus,
     remarks: item.remarks,
     photoUrl: item.vesselPhotoUrl || item.helmsmanPhotoUrl || item.engineerPhotoUrl,
+    rectificationPhotoUrl: item.rectificationPhotoUrl,
     raw: item
   }));
 
@@ -131,6 +142,7 @@ export default function HistoryLog({
     status: item.overallStatus,
     remarks: item.remarks,
     photoUrl: item.photoUrl,
+    rectificationPhotoUrl: item.rectificationPhotoUrl,
     raw: item
   }));
 
@@ -167,25 +179,25 @@ export default function HistoryLog({
     switch (category) {
       case 'extinguisher':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 text-[10.5px] font-extrabold rounded-md">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[10.5px] font-extrabold rounded-md uppercase">
             <Flame className="h-3 w-3" /> ถังดับเพลิง
           </span>
         );
       case 'lifejacket':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 text-[10.5px] font-extrabold rounded-md">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-orange-500/10 text-orange-500 border border-orange-500/20 text-[10.5px] font-extrabold rounded-md uppercase">
             <LifeBuoy className="h-3 w-3" /> เสื้อชูชีพ
           </span>
         );
       case 'license':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-50 text-blue-750 border border-blue-200 text-[10.5px] font-extrabold rounded-md">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10.5px] font-extrabold rounded-md uppercase">
             <FileText className="h-3 w-3" /> ใบอนุญาตเรือ
           </span>
         );
       case 'medical':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10.5px] font-extrabold rounded-md">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10.5px] font-extrabold rounded-md uppercase">
             <HeartPulse className="h-3 w-3" /> ตู้ยาเวชภัณฑ์
           </span>
         );
@@ -197,14 +209,14 @@ export default function HistoryLog({
   const getStatusIndicator = (val: string) => {
     if (val === 'Pass') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2 bg-green-50 text-green-700 border border-green-200 text-[11px] font-extrabold rounded-md py-0.5">
+        <span className="inline-flex items-center gap-1.5 px-2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-black rounded-md py-0.5 uppercase tracking-wider">
           <CheckCircle className="h-3 w-3" /> ผ่านเกณฑ์
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 bg-red-50 text-red-700 border border-red-200 text-[11px] font-extrabold rounded-md py-0.5 animate-pulse">
-        <AlertCircle className="h-3 w-3" /> ไม่ผ่านเกณฑ์
+      <span className="inline-flex items-center gap-1.5 px-2 bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[10px] font-black rounded-md py-0.5 animate-pulse uppercase tracking-wider">
+        <AlertCircle className="h-3 w-3" /> บกพร่อง
       </span>
     );
   };
@@ -215,9 +227,15 @@ export default function HistoryLog({
       const catTh = categoryFilter === 'extinguisher' ? 'ถังดับเพลิง' : categoryFilter === 'lifejacket' ? 'เสื้อชูชีพ' : categoryFilter === 'license' ? 'ใบอนุญาตเรือ' : 'ตู้ยาเวชภัณฑ์';
       confirmMsg = `คุณต้องการที่จะล้างประวัติเฉพาะหมวดหมู่ [${catTh}] ออกจากบราวเซอร์ หรือไม่?`;
     }
-    const isConfirmed = window.confirm(confirmMsg);
-    if (isConfirmed) {
-      onClearHistory(categoryFilter);
+    if (onShowConfirm) {
+      onShowConfirm('ยืนยันการล้างประวัติ', confirmMsg, () => {
+        onClearHistory(categoryFilter);
+      });
+    } else {
+      const isConfirmed = window.confirm(confirmMsg);
+      if (isConfirmed) {
+        onClearHistory(categoryFilter);
+      }
     }
   };
 
@@ -246,16 +264,16 @@ export default function HistoryLog({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6 font-sans">
+    <div className="bg-white rounded-2xl border border-slate-300 p-6 shadow-2xl space-y-6 font-sans">
       
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-300 pb-5">
         <div>
-          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
-            <Calendar className="h-6 w-6 text-blue-600 animate-pulse" />
+          <h2 className="text-xl font-black text-slate-950 flex items-center gap-2 tracking-tight">
+            <Calendar className="h-6 w-6 text-indigo-700 animate-pulse" />
             ศูนย์ประวัติบันทึกความปลอดภัยแบบรวมศูนย์ (Integrated Safety Inspection Logs)
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1 font-bold">
             เก็บบันทึกข้อมูลตรวจสอบและสถานะย้อนหลังอย่างเป็นทางการ สำหรับถังดับเพลิง เสื้อชูชีพ ใบรับรองเรือ และตู้ยา สำหรับเรือท่องเที่ยว 7 ลำ และท่าเทียบเรือ 11 ท่า
           </p>
         </div>
@@ -263,7 +281,7 @@ export default function HistoryLog({
         {allUnifiedRecords.length > 0 && (
           <button
             onClick={handleClearConfirm}
-            className="text-red-600 border-2 border-red-150 hover:bg-red-50 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all self-start md:self-center shrink-0"
+            className="text-rose-500 border border-rose-500/30 hover:bg-rose-500/10 px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all self-start md:self-center shrink-0 uppercase tracking-wider shadow-lg shadow-rose-200/20"
             title="ล้างประวัติเครื่อง"
           >
             <Trash2 className="h-4 w-4" />
@@ -273,9 +291,9 @@ export default function HistoryLog({
       </div>
 
       {/* 1. Category Switch Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-slate-300 pb-3">
         {[
-          { id: 'all', label: '📁 ประวัติทั้งหมด', count: allUnifiedRecords.length, color: 'border-slate-800 bg-slate-900 text-white' },
+          { id: 'all', label: '📁 ประวัติทั้งหมด', count: allUnifiedRecords.length, color: 'border-slate-300 bg-white text-slate-950' },
           { id: 'extinguisher', label: '🧯 ตรวจถังดับเพลิง', count: unifiedExts.length, color: 'border-red-500 bg-red-600 text-white' },
           { id: 'lifejacket', label: '🧡 ตรวจเสื้อชูชีพ', count: unifiedLJs.length, color: 'border-orange-500 bg-orange-500 text-white' },
           { id: 'license', label: '🚢 ตรวจใบอนุญาตเรือ/เจ้าหน้าที่', count: unifiedLics.length, color: 'border-blue-600 bg-blue-600 text-white' },
@@ -291,13 +309,13 @@ export default function HistoryLog({
               }}
               className={`px-3.5 py-1.5 rounded-xl border text-xs font-black cursor-pointer transition-all flex items-center gap-1.5 ${
                 isActive 
-                  ? 'bg-slate-900 text-white border-slate-950 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg'
+                  : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-200 hover:text-slate-950'
               }`}
             >
               <span>{cat.label}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                isActive ? 'bg-white/20 text-white' : 'bg-white text-slate-500 border border-slate-300'
               }`}>
                 {cat.count}
               </span>
@@ -307,20 +325,19 @@ export default function HistoryLog({
       </div>
 
       {/* 2. Advanced Multi-Filter Options Panel */}
-      <div className="bg-slate-50/50 p-4 border border-slate-150 rounded-2xl text-xs space-y-4">
+      <div className="bg-white p-4 border border-slate-300 rounded-2xl text-xs space-y-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-1.5 mr-2">
-            <Filter className="h-4 w-4 text-slate-400" />
-            <span className="font-extrabold text-slate-700">ตัวกรองระบบ:</span>
+            <Filter className="h-4 w-4 text-slate-500" />
+            <span className="font-extrabold text-slate-500 uppercase tracking-widest text-[10px]">ตัวกรองระบบ:</span>
           </div>
 
           {/* Boat Filter */}
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-bold">เรือ/เป้าหมาย:</span>
-            <select
-              value={boatFilter}
+            <span className="text-slate-500 font-black">เรือ/เป้าหมาย:</span>
+            <select value={boatFilter}
               onChange={(e) => setBoatFilter(e.target.value)}
-              className="bg-white text-slate-700 border border-slate-200 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-blue-500 cursor-pointer shadow-3xs"
+              className="bg-white text-slate-950 border border-slate-300 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-3xs"
             >
               <option value="all">ทั้งหมด (All Boats/Piers)</option>
               {uniqueBoats.map((name) => (
@@ -333,11 +350,10 @@ export default function HistoryLog({
 
           {/* Status Filter */}
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-bold">ผลตรวจ:</span>
-            <select
-              value={statusFilter}
+            <span className="text-slate-500 font-black">ผลตรวจ:</span>
+            <select value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-white text-slate-700 border border-slate-200 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-blue-500 cursor-pointer shadow-3xs"
+              className="bg-white text-slate-950 border border-slate-300 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-3xs"
             >
               <option value="all">ทุกสถานะ (All)</option>
               <option value="Pass">ผ่านเกณฑ์ (Pass)</option>
@@ -348,10 +364,9 @@ export default function HistoryLog({
           {/* Year Filter */}
           <div className="flex items-center gap-1.5">
             <span className="text-slate-500 font-bold">ปี พ.ศ.:</span>
-            <select
-              value={yearFilter}
+            <select value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
-              className="bg-white text-slate-700 border border-slate-200 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-blue-500 cursor-pointer shadow-3xs"
+              className="bg-white text-slate-950 border border-slate-300 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-3xs"
             >
               <option value="all">ทุกปี</option>
               {yearsList.map((y) => (
@@ -365,10 +380,9 @@ export default function HistoryLog({
           {/* Month Filter */}
           <div className="flex items-center gap-1.5">
             <span className="text-slate-500 font-bold">เดือน:</span>
-            <select
-              value={monthFilter}
+            <select value={monthFilter}
               onChange={(e) => setMonthFilter(e.target.value)}
-              className="bg-white text-slate-700 border border-slate-200 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-blue-500 cursor-pointer shadow-3xs"
+              className="bg-white text-slate-950 border border-slate-300 rounded-lg py-1.5 px-2.5 font-bold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-3xs"
             >
               <option value="all">ทุกเดือน</option>
               {thaiMonths.map((m) => (
@@ -381,16 +395,16 @@ export default function HistoryLog({
         </div>
 
         {/* Display options & total items found counter */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-200/60 pt-3 text-slate-500 font-medium">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-300 pt-3 text-slate-500 font-medium">
           <div className="flex items-center gap-2">
             <span>มุมมองการแสดงผล:</span>
-            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5 shadow-3xs">
+            <div className="inline-flex rounded-xl border border-slate-300 bg-white p-0.5 shadow-3xs">
               <button
                 onClick={() => setGroupedByMonthView(true)}
                 className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
                   groupedByMonthView
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-500 hover:bg-slate-100/50'
                 }`}
               >
                 <Grid className="h-3.5 w-3.5" />
@@ -400,8 +414,8 @@ export default function HistoryLog({
                 onClick={() => setGroupedByMonthView(false)}
                 className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
                   !groupedByMonthView
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-500 hover:bg-slate-100/50'
                 }`}
               >
                 <List className="h-3.5 w-3.5" />
@@ -412,7 +426,7 @@ export default function HistoryLog({
 
           <div className="flex items-center gap-1.5">
             <span>พบข้อมูลประวัติตามตัวกรอง:</span>
-            <span className="font-extrabold font-mono text-slate-800 bg-white border border-slate-200 rounded px-2.5 py-0.5">
+            <span className="font-extrabold font-mono text-indigo-700 bg-white border border-slate-300 rounded px-2.5 py-0.5">
               {filteredHistory.length} รายการ
             </span>
           </div>
@@ -421,10 +435,10 @@ export default function HistoryLog({
 
       {/* 3. History Logs Rendering */}
       {filteredHistory.length === 0 ? (
-        <div className="py-20 text-center bg-slate-50 rounded-2xl flex flex-col items-center justify-center space-y-3 border border-dashed border-slate-200">
-          <Calendar className="h-10 w-10 text-slate-300" />
-          <div className="text-sm font-bold text-slate-700">ไม่พบประวัติการตรวจสอบย่อยในเงื่อนไขปัจจุบัน</div>
-          <div className="text-xs text-slate-400 max-w-sm px-6">
+        <div className="py-20 text-center bg-white rounded-2xl flex flex-col items-center justify-center space-y-3 border border-dashed border-slate-300">
+          <Calendar className="h-10 w-10 text-slate-700" />
+          <div className="text-sm font-bold text-slate-500">ไม่พบประวัติการตรวจสอบย่อยในเงื่อนไขปัจจุบัน</div>
+          <div className="text-xs text-slate-500 max-w-sm px-6">
             กรุณาตรวจสอบว่าคุณเลือกแท็บด้านบนถูกต้อง หรือมีข้อมูลที่ตรงกับตัวกรองชื่อเรือท่องเที่ยว/ท่าเทียบเรือ หรือผลการตรวจสอบหรือไม่
           </div>
         </div>
@@ -437,29 +451,29 @@ export default function HistoryLog({
             const failCount = records.filter((r) => r.status === 'Fail').length;
 
             return (
-              <div key={ymKey} className="bg-slate-50/20 rounded-2xl border border-slate-200 p-4 space-y-4">
+              <div key={ymKey} className="bg-white rounded-2xl border border-slate-300 p-4 space-y-4">
                 
                 {/* Month block banner */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 px-4 py-3 rounded-xl shadow-3xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-300 px-4 py-3 rounded-xl shadow-3xs">
                   <div className="flex items-center gap-2">
-                    <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
+                    <span className="p-1.5 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200">
                       <Calendar className="h-4 w-4" />
                     </span>
-                    <h3 className="font-extrabold text-sm text-slate-800">
+                    <h3 className="font-extrabold text-sm text-slate-950">
                       {getMonthLabelThai(ymKey)}
                     </h3>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap text-[11px] font-bold">
                     <span className="text-slate-500">
-                      รวมตรวจสอบในงวดนี้: <span className="text-slate-900 font-mono bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">{records.length} รายการ</span>
+                      รวมตรวจสอบในงวดนี้: <span className="text-slate-700 font-mono bg-white border border-slate-300 px-2 py-0.5 rounded">{records.length} รายการ</span>
                     </span>
-                    <span className="text-slate-300">|</span>
-                    <span className="text-green-700 bg-green-50 border border-green-150 px-2 py-0.5 rounded-md">
+                    <span className="text-slate-950">|</span>
+                    <span className="text-emerald-700 bg-emerald-50/40 border border-emerald-200/50 px-2 py-0.5 rounded-md">
                       ผ่าน: {passCount}
                     </span>
                     {failCount > 0 && (
-                      <span className="text-red-700 bg-red-50 border border-red-150 px-2 py-0.5 rounded-md animate-pulse">
+                      <span className="text-rose-700 bg-rose-50/40 border border-rose-200/50 px-2 py-0.5 rounded-md animate-pulse">
                         บกพร่อง: {failCount}
                       </span>
                     )}
@@ -467,10 +481,10 @@ export default function HistoryLog({
                 </div>
 
                 {/* Grid layout for cards / small tables for responsiveness */}
-                <div className="overflow-x-auto rounded-xl border border-slate-150 bg-white">
+                <div className="overflow-x-auto rounded-xl border border-slate-300 bg-white">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="bg-slate-50/80 text-slate-500 font-extrabold border-b border-slate-150">
+                      <tr className="bg-white text-slate-950 font-black border-b border-slate-300">
                         <th className="p-3 font-mono w-20">รหัสบันทึก</th>
                         <th className="p-3">หมวดตรวจ</th>
                         <th className="p-3">เรือ / สถานที่</th>
@@ -482,18 +496,18 @@ export default function HistoryLog({
                         <th className="p-3">เจาะลึก/หมายเหตุ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-800">
                       {records.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="p-3 font-mono font-bold text-blue-600">{item.id.substring(0, 10)}</td>
+                        <tr key={item.id} className="hover:bg-slate-100/50 transition-colors">
+                          <td className="p-3 font-mono font-black text-indigo-700">{item.id.substring(0, 10)}</td>
                           <td className="p-3">{getCategoryBadge(item.category)}</td>
-                          <td className="p-3 font-extrabold text-slate-800">{item.boatOrTargetName}</td>
-                          <td className="p-3 font-medium text-slate-600 truncate max-w-xs" title={item.locationOrDetail}>
+                          <td className="p-3 font-black text-slate-950">{item.boatOrTargetName}</td>
+                          <td className="p-3 font-bold text-slate-700 truncate max-w-xs" title={item.locationOrDetail}>
                             {item.locationOrDetail}
                           </td>
-                          <td className="p-3 font-mono text-slate-500 font-bold">{item.inspectionDate}</td>
-                          <td className="p-3 font-medium text-slate-700 flex items-center gap-1.5">
-                            <Users className="h-3.5 w-3.5 text-slate-400" />
+                          <td className="p-3 font-mono text-slate-500 font-black">{item.inspectionDate}</td>
+                          <td className="p-3 font-bold text-slate-950 flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5 text-slate-500" />
                             <span>{item.inspectorName}</span>
                           </td>
                           <td className="p-3">{getStatusIndicator(item.status)}</td>
@@ -501,7 +515,7 @@ export default function HistoryLog({
                             {item.photoUrl ? (
                               <div 
                                 onClick={() => setSelectedPhoto(item.photoUrl || null)}
-                                className="relative w-10 h-10 rounded-lg border border-slate-200 overflow-hidden cursor-pointer hover:border-slate-400 hover:scale-105 transition-all shadow-3xs"
+                                className="relative w-10 h-10 rounded-lg border border-slate-300 overflow-hidden cursor-pointer hover:border-slate-500 hover:scale-105 transition-all shadow-3xs"
                               >
                                 <img 
                                   src={item.photoUrl} 
@@ -511,7 +525,7 @@ export default function HistoryLog({
                                 />
                               </div>
                             ) : (
-                              <span className="text-slate-400 font-mono">-</span>
+                              <span className="text-slate-600 font-mono">-</span>
                             )}
                           </td>
                           <td className="p-3 text-slate-500 max-w-xs">
@@ -520,7 +534,7 @@ export default function HistoryLog({
                               {item.category === 'license' && (
                                 <button 
                                   onClick={() => setSelectedLicenseRecord(item.raw)}
-                                  className="p-1 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
+                                  className="p-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-800 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
                                 >
                                   <Eye className="h-3 w-3" /> ใบอนุญาต
                                 </button>
@@ -528,7 +542,7 @@ export default function HistoryLog({
                               {item.category === 'medical' && (
                                 <button 
                                   onClick={() => setSelectedMedicalRecord(item.raw)}
-                                  className="p-1 text-emerald-600 hover:bg-emerald-50 border border-emerald-200 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
+                                  className="p-1 text-emerald-700 hover:bg-emerald-50 border border-emerald-800 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
                                 >
                                   <Eye className="h-3 w-3" /> ดูเวชภัณฑ์
                                 </button>
@@ -546,10 +560,10 @@ export default function HistoryLog({
         </div>
       ) : (
         /* 3.2 Flat List View of all records unified */
-        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-3xs bg-white">
+        <div className="overflow-x-auto rounded-xl border border-slate-300 shadow-2xl bg-white">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 font-extrabold border-b border-slate-200">
+              <tr className="bg-white text-slate-500 font-extrabold border-b border-slate-300">
                 <th className="p-4 font-mono w-20">รหัสบันทึก</th>
                 <th className="p-4">หมวดตรวจ</th>
                 <th className="p-4">เรือ / สถานที่</th>
@@ -561,45 +575,86 @@ export default function HistoryLog({
                 <th className="p-4">หมายเหตุและเจาะลึก</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-800">
               {filteredHistory.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/40 transition-colors">
-                  <td className="p-4 font-mono font-bold text-blue-600">{item.id.substring(0, 10)}</td>
+                <tr key={item.id} className="hover:bg-slate-100/50 transition-colors">
+                  <td className="p-4 font-mono font-bold text-indigo-700">{item.id.substring(0, 10)}</td>
                   <td className="p-4">{getCategoryBadge(item.category)}</td>
-                  <td className="p-4 font-extrabold text-slate-800">{item.boatOrTargetName}</td>
-                  <td className="p-4 text-slate-650 font-medium" title={item.locationOrDetail}>
+                  <td className="p-4 font-extrabold text-slate-950">{item.boatOrTargetName}</td>
+                  <td className="p-4 text-slate-500 font-medium" title={item.locationOrDetail}>
                     {item.locationOrDetail}
                   </td>
-                  <td className="p-4 font-mono text-slate-550 font-bold">{item.inspectionDate}</td>
+                  <td className="p-4 font-mono text-slate-500 font-bold">{item.inspectionDate}</td>
                   <td className="p-4 font-medium text-slate-700 flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                    <Users className="h-3.5 w-3.5 text-slate-500" />
                     <span>{item.inspectorName}</span>
                   </td>
                   <td className="p-4">{getStatusIndicator(item.status)}</td>
                   <td className="p-4">
-                    {item.photoUrl ? (
-                      <div 
-                        onClick={() => setSelectedPhoto(item.photoUrl || null)}
-                        className="relative w-10 h-10 rounded-lg border border-slate-200 overflow-hidden cursor-pointer hover:border-slate-400 hover:scale-105 transition-all shadow-3xs"
-                      >
-                        <img 
-                          src={item.photoUrl} 
-                          alt="Attachment" 
-                          className="w-full h-full object-cover" 
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 font-mono">-</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.photoUrl ? (
+                        <div 
+                          onClick={() => setSelectedPhoto(item.photoUrl || null)}
+                          className="relative w-10 h-10 rounded-lg border border-slate-300 overflow-hidden cursor-pointer hover:border-slate-500 hover:scale-105 transition-all shadow-3xs"
+                          title="ดูรูปตรวจสอบ"
+                        >
+                          <img 
+                            src={item.photoUrl} 
+                            alt="Attachment" 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-slate-600 font-mono">-</span>
+                      )}
+
+                      {item.rectificationPhotoUrl && (
+                        <div 
+                          onClick={() => setSelectedPhoto(item.rectificationPhotoUrl || null)}
+                          className="relative w-10 h-10 rounded-lg border border-emerald-700 overflow-hidden cursor-pointer hover:border-emerald-500 hover:scale-105 transition-all shadow-3xs"
+                          title="ดูรูปการแก้ไข"
+                        >
+                          <img 
+                            src={item.rectificationPhotoUrl} 
+                            alt="Rectification" 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute top-0 right-0 bg-emerald-600 text-white p-0.5 rounded-bl-md">
+                            <CheckCircle className="h-2 w-2" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4 text-slate-500 max-w-xs">
                     <div className="flex items-center gap-2">
                       <span className="truncate block flex-1" title={item.remarks}>{item.remarks || '-'}</span>
+                      {onAddRectificationPhoto && item.status === 'Fail' && !item.rectificationPhotoUrl && (
+                        <label className="p-1 text-emerald-700 hover:bg-emerald-50 border border-emerald-800 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5 cursor-pointer">
+                          <ImagePlus className="h-3 w-3" /> เพิ่มรูปแก้ไข
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="bg-white hidden" 
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  onAddRectificationPhoto(item.id, item.category, reader.result as string);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
                       {item.category === 'license' && (
                         <button 
                           onClick={() => setSelectedLicenseRecord(item.raw)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
+                          className="p-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-800 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
                         >
                           <Eye className="h-3 w-3" /> ใบอนุญาต
                         </button>
@@ -607,7 +662,7 @@ export default function HistoryLog({
                       {item.category === 'medical' && (
                         <button 
                           onClick={() => setSelectedMedicalRecord(item.raw)}
-                          className="p-1 text-emerald-600 hover:bg-emerald-50 border border-emerald-200 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
+                          className="p-1 text-emerald-700 hover:bg-emerald-50 border border-emerald-800 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5"
                         >
                           <Eye className="h-3 w-3" /> ดูเวชภัณฑ์
                         </button>
@@ -615,7 +670,7 @@ export default function HistoryLog({
                       {onDeleteRecord && (
                         <button 
                           onClick={() => onDeleteRecord(item.id, item.category as any)}
-                          className="p-1 text-red-600 hover:bg-red-50 border border-red-200 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5 cursor-pointer"
+                          className="p-1 text-rose-500 hover:bg-rose-50/40 border border-rose-200/50 rounded text-[10px] font-bold shrink-0 flex items-center gap-0.5 cursor-pointer"
                           title="ลบรายการนี้"
                         >
                           <Trash2 className="h-3 w-3" /> ลบ
@@ -633,20 +688,20 @@ export default function HistoryLog({
       {/* 4. MODALS FOR DRILL-DOWN DETAILS */}
       
       {/* 4.1 Simple Lightbox Zoom Portal */}
-      {selectedPhoto && (
+      {selectedPhoto && createPortal(
         <div 
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in"
+          className="fixed inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in"
           onClick={() => setSelectedPhoto(null)}
         >
-          <div className="relative bg-white p-2 rounded-2xl border border-slate-900 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="relative bg-white p-2 rounded-2xl border-2 border-slate-900 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
             <button
               onClick={() => setSelectedPhoto(null)}
-              className="absolute top-4 right-4 bg-slate-900/80 text-white p-2 rounded-full cursor-pointer hover:bg-slate-950 transition-colors z-10 font-bold"
+              className="absolute top-4 right-4 bg-white/90 text-slate-950 p-2 rounded-full cursor-pointer hover:bg-slate-100 border border-slate-300 transition-colors z-10 font-bold"
               title="Close"
             >
               ✕
             </button>
-            <div className="flex-1 bg-slate-950 flex items-center justify-center overflow-hidden rounded-xl">
+            <div className="flex-1 bg-white flex items-center justify-center overflow-hidden rounded-xl border border-slate-300">
               <img 
                 src={selectedPhoto} 
                 alt="Audit Zoom" 
@@ -655,163 +710,165 @@ export default function HistoryLog({
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 4.2 License Detailed Card View Popover */}
-      {selectedLicenseRecord && (
+      {selectedLicenseRecord && createPortal(
         <div 
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in"
+          className="fixed inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in"
           onClick={() => setSelectedLicenseRecord(null)}
         >
           <div 
-            className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col font-sans"
+            className="bg-white rounded-2xl border-2 border-slate-900 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col font-sans text-slate-950"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+            <div className="bg-white text-slate-950 p-4 flex justify-between items-center border-b-2 border-slate-300">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-400" />
-                <h3 className="font-extrabold text-sm">เจาะลึกใบอนุญาตเรือ & นายท้าย - {selectedLicenseRecord.boatName}</h3>
+                <FileText className="h-5 w-5 text-blue-600" />
+                <h3 className="font-black text-sm text-slate-950">เจาะลึกใบอนุญาตเรือ & นายท้าย - {selectedLicenseRecord.boatName}</h3>
               </div>
               <button 
                 onClick={() => setSelectedLicenseRecord(null)} 
-                className="text-slate-400 hover:text-white font-extrabold text-xs cursor-pointer"
+                className="text-slate-500 hover:text-slate-950 font-black text-xs cursor-pointer"
               >
                 ✕ ปิด
               </button>
             </div>
 
             <div className="p-5 space-y-4 text-xs overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
+              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-300">
                 <div>
-                  <span className="text-slate-400 text-[10px] uppercase font-mono block">วันที่บันทึกประวัติ</span>
-                  <span className="font-bold text-slate-800">{selectedLicenseRecord.inspectionDate}</span>
+                  <span className="text-slate-500 text-[10px] uppercase font-black block">วันที่บันทึกประวัติ</span>
+                  <span className="font-black text-slate-950">{selectedLicenseRecord.inspectionDate}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 text-[10px] uppercase font-mono block">นายเรือหรือผู้ตรวจสอบ</span>
-                  <span className="font-bold text-slate-800">{selectedLicenseRecord.inspectorName}</span>
+                  <span className="text-slate-500 text-[10px] uppercase font-black block">นายเรือหรือผู้ตรวจสอบ</span>
+                  <span className="font-black text-slate-950">{selectedLicenseRecord.inspectorName}</span>
                 </div>
               </div>
 
               {/* Grid 3 licenses status */}
               <div className="space-y-3">
-                <h4 className="font-bold text-slate-800 text-xs border-l-2 border-l-blue-600 pl-2">สถานะใบสำคัญประจำตัวเรือและคนประจำเรือ:</h4>
+                <h4 className="font-black text-slate-950 text-xs border-l-2 border-l-blue-600 pl-2">สถานะใบสำคัญประจำตัวเรือและคนประจำเรือ:</h4>
                 
                 {/* 1. Vessel */}
-                <div className="p-3 bg-slate-50 border border-slate-150 rounded-lg space-y-1">
+                <div className="p-3 bg-white border border-slate-300 rounded-lg space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="font-extrabold text-slate-800">1. ใบอนุญาตใช้เรือ</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      selectedLicenseRecord.vesselLicenseStatus === 'Normal' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700 animate-pulse'
+                    <span className="font-black text-slate-950">1. ใบอนุญาตใช้เรือ</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                      selectedLicenseRecord.vesselLicenseStatus === 'Normal' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200 animate-pulse'
                     }`}>
                       {selectedLicenseRecord.vesselLicenseStatus === 'Normal' ? 'ปกติ' : 'หมดอายุ/บกพร่อง'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500">เลขที่ใบอนุญาต: {selectedLicenseRecord.vesselLicenseNo || 'ไม่มีข้อมูล'}</p>
-                  <p className="text-[11px] text-slate-500">วันหมดอายุใบอนุญาต: {selectedLicenseRecord.vesselLicenseExpiry}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">เลขที่ใบอนุญาต: {selectedLicenseRecord.vesselLicenseNo || 'ไม่มีข้อมูล'}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">วันหมดอายุใบอนุญาต: {selectedLicenseRecord.vesselLicenseExpiry}</p>
                 </div>
 
                 {/* 2. Helmsman */}
-                <div className="p-3 bg-slate-50 border border-slate-150 rounded-lg space-y-1">
+                <div className="p-3 bg-white border border-slate-300 rounded-lg space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="font-extrabold text-slate-800">2. ใบประกาศนียบัตรนายท้าย</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      selectedLicenseRecord.helmsmanLicenseStatus === 'Normal' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700 animate-pulse'
+                    <span className="font-black text-slate-950">2. ใบประกาศนียบัตรนายท้าย</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                      selectedLicenseRecord.helmsmanLicenseStatus === 'Normal' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200 animate-pulse'
                     }`}>
                       {selectedLicenseRecord.helmsmanLicenseStatus === 'Normal' ? 'ปกติ' : 'หมดอายุ/บกพร่อง'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500">ชื่อผู้ทำการในเรือ (กัปตัน): {selectedLicenseRecord.helmsmanName}</p>
-                  <p className="text-[11px] text-slate-500">เลขที่ใบนายท้าย: {selectedLicenseRecord.helmsmanLicenseNo}</p>
-                  <p className="text-[11px] text-slate-500">วันหมดอายุประกาศนียบัตร: {selectedLicenseRecord.helmsmanLicenseExpiry}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">ชื่อผู้ทำการในเรือ (กัปตัน): {selectedLicenseRecord.helmsmanName}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">เลขที่ใบนายท้าย: {selectedLicenseRecord.helmsmanLicenseNo}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">วันหมดอายุประกาศนียบัตร: {selectedLicenseRecord.helmsmanLicenseExpiry}</p>
                 </div>
 
                 {/* 3. Engineer */}
-                <div className="p-3 bg-slate-50 border border-slate-150 rounded-lg space-y-1">
+                <div className="p-3 bg-white border border-slate-300 rounded-lg space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="font-extrabold text-slate-800">3. ประกาศนียบัตรคนใช้เครื่องจักรอันทรงพลัง</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      selectedLicenseRecord.engineerLicenseStatus === 'Normal' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700 animate-pulse'
+                    <span className="font-black text-slate-950">3. ประกาศนียบัตรคนใช้เครื่องจักรอันทรงพลัง</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                      selectedLicenseRecord.engineerLicenseStatus === 'Normal' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200 animate-pulse'
                     }`}>
                       {selectedLicenseRecord.engineerLicenseStatus === 'Normal' ? 'ปกติ' : 'หมดอายุ/บกพร่อง'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500">ชื่อผู้ทำการในเรือ (วิศวกร): {selectedLicenseRecord.engineerName}</p>
-                  <p className="text-[11px] text-slate-500">เลขที่ใบช่างเครื่อง: {selectedLicenseRecord.engineerLicenseNo}</p>
-                  <p className="text-[11px] text-slate-500">วันหมดอายุช่างเครื่อง: {selectedLicenseRecord.engineerLicenseExpiry}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">ชื่อผู้ทำการในเรือ (วิศวกร): {selectedLicenseRecord.engineerName}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">เลขที่ใบช่างเครื่อง: {selectedLicenseRecord.engineerLicenseNo}</p>
+                  <p className="text-[11px] text-slate-600 font-bold">วันหมดอายุช่างเครื่อง: {selectedLicenseRecord.engineerLicenseExpiry}</p>
                 </div>
               </div>
 
               {selectedLicenseRecord.remarks && (
-                <div className="bg-amber-50 border border-amber-100 p-3 rounded-lg text-slate-700 leading-relaxed text-[11px]">
-                  <strong className="block text-slate-800">หมายเหตุผู้ตรวจทาน:</strong>
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-slate-700 leading-relaxed text-[11px] font-bold">
+                  <strong className="block text-amber-900">หมายเหตุผู้ตรวจทาน:</strong>
                   {selectedLicenseRecord.remarks}
                 </div>
               )}
             </div>
 
-            <div className="bg-slate-50 p-3 text-right border-t border-slate-100">
+            <div className="bg-white p-3 text-right border-t border-slate-300">
               <button 
                 onClick={() => setSelectedLicenseRecord(null)}
-                className="bg-slate-900 text-white font-bold text-xs px-4 py-2 rounded-lg cursor-pointer"
+                className="bg-indigo-600 text-white font-black text-xs px-4 py-2 rounded-lg cursor-pointer hover:bg-indigo-700"
               >
                 เข้าใจแล้ว
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 4.3 Medical Detailed Card View Popover */}
-      {selectedMedicalRecord && (
+      {selectedMedicalRecord && createPortal(
         <div 
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in"
+          className="fixed inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in"
           onClick={() => setSelectedMedicalRecord(null)}
         >
           <div 
-            className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col font-sans"
+            className="bg-white rounded-2xl border-2 border-slate-900 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col font-sans text-slate-950"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+            <div className="bg-white text-slate-950 p-4 flex justify-between items-center border-b-2 border-slate-300">
               <div className="flex items-center gap-2">
-                <HeartPulse className="h-5 w-5 text-emerald-400" />
-                <h3 className="font-extrabold text-sm">รายละเอียดผลตรวจตู้ยาปฐมพยาบาล - {selectedMedicalRecord.targetName}</h3>
+                <HeartPulse className="h-5 w-5 text-emerald-600" />
+                <h3 className="font-black text-sm text-slate-950">รายละเอียดผลตรวจตู้ยาปฐมพยาบาล - {selectedMedicalRecord.targetName}</h3>
               </div>
               <button 
                 onClick={() => setSelectedMedicalRecord(null)} 
-                className="text-slate-400 hover:text-white font-extrabold text-xs cursor-pointer"
+                className="text-slate-500 hover:text-slate-950 font-black text-xs cursor-pointer"
               >
                 ✕ ปิด
               </button>
             </div>
 
             <div className="p-5 space-y-4 text-xs overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
+              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-300">
                 <div>
-                  <span className="text-slate-400 text-[10px] block">ประเภทตู้ยาเวชภัณฑ์</span>
-                  <span className="font-bold text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded inline-block mt-0.5">
+                  <span className="text-slate-500 text-[10px] block font-black uppercase">ประเภทตู้ยาเวชภัณฑ์</span>
+                  <span className="font-black text-slate-950 bg-white border border-slate-300 px-2 py-0.5 rounded inline-block mt-0.5">
                     {selectedMedicalRecord.stationType === 'boat' ? '🏥 ตู้ยาประจำบนเรือท่องเที่ยว' : '🏢 ตู้ยาประจำท่าเรือหลัก'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 text-[10px] block">ผู้เข้าตรวจสอบเวชภัณฑ์</span>
-                  <span className="font-bold text-slate-800">{selectedMedicalRecord.inspectorName}</span>
+                  <span className="text-slate-500 text-[10px] block font-black uppercase">ผู้เข้าตรวจสอบเวชภัณฑ์</span>
+                  <span className="font-black text-slate-950">{selectedMedicalRecord.inspectorName}</span>
                 </div>
               </div>
 
               {/* Items Table inside medicine kit */}
               <div className="space-y-2">
-                <h4 className="font-bold text-slate-800">สรุปข้อมูลยาและอุปกรณ์เวชภัณฑ์:</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <h4 className="font-black text-slate-950">สรุปข้อมูลยาและอุปกรณ์เวชภัณฑ์:</h4>
+                <div className="border border-slate-300 rounded-lg overflow-hidden bg-white">
                   <table className="w-full text-left border-collapse text-[11px]">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                      <tr className="bg-white text-slate-700 font-black border-b border-slate-300">
                         <th className="p-2">ชื่อยา/เวชภัณฑ์</th>
                         <th className="p-2 text-center">สถานะสต็อก</th>
                         <th className="p-2">อายุเวชภัณฑ์</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-200">
                       {[
                         { label: 'ยาพาราเซตามอล (Paracetamol)', status: selectedMedicalRecord.paracetamolStatus, expiry: selectedMedicalRecord.paracetamolExpiry },
                         { label: 'ยาแก้เมารถและยาแก้แพ้', status: selectedMedicalRecord.motionSicknessStatus, expiry: selectedMedicalRecord.motionSicknessExpiry },
@@ -825,20 +882,20 @@ export default function HistoryLog({
                         { label: 'สำลีก้อนกลมปลอดเชื้อ', status: selectedMedicalRecord.cottonBallsStatus, expiry: selectedMedicalRecord.cottonBallsExpiry },
                         { label: 'สภาพกล่องบรรจุตู้ยาแห้งสนิทและปิดมิดชิด', status: selectedMedicalRecord.containerStatus, expiry: '-' },
                       ].map((med, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50">
-                          <td className="p-2 font-medium text-slate-700">{med.label}</td>
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-2 font-bold text-slate-950">{med.label}</td>
                           <td className="p-2 text-center">
-                            <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                            <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-black ${
                               med.status === 'Normal' 
-                                ? 'bg-green-100 text-green-700' 
+                                ? 'bg-green-100 text-green-800 border border-green-200' 
                                 : med.status === 'LowStock' 
-                                ? 'bg-amber-100 text-amber-700' 
-                                : 'bg-red-100 text-red-700'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                : 'bg-red-100 text-red-800 border border-red-200'
                             }`}>
                               {med.status === 'Normal' ? 'พร้อมใช้งาน' : med.status === 'LowStock' ? 'เหลือน้อย' : med.status === 'Expired' ? 'หมดอายุ' : 'ขาดแคลน'}
                             </span>
                           </td>
-                          <td className="p-2 font-mono text-slate-500">{med.expiry}</td>
+                          <td className="p-2 font-mono text-slate-600 font-bold">{med.expiry}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -847,23 +904,24 @@ export default function HistoryLog({
               </div>
 
               {selectedMedicalRecord.remarks && (
-                <div className="bg-amber-50 border border-amber-100 p-3 rounded-lg text-slate-700 leading-relaxed text-[11px]">
-                  <strong className="block text-slate-800 font-bold">หมายเหตุผลการตรวจเพิ่มเติม:</strong>
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-slate-700 leading-relaxed text-[11px] font-bold">
+                  <strong className="block text-amber-900 font-black">หมายเหตุผลการตรวจเพิ่มเติม:</strong>
                   {selectedMedicalRecord.remarks}
                 </div>
               )}
             </div>
 
-            <div className="bg-slate-50 p-3 text-right border-t border-slate-100">
+            <div className="bg-white p-3 text-right border-t border-slate-300">
               <button 
                 onClick={() => setSelectedMedicalRecord(null)}
-                className="bg-slate-900 text-white font-bold text-xs px-4 py-2 rounded-lg cursor-pointer"
+                className="bg-indigo-600 text-white font-black text-xs px-4 py-2 rounded-lg cursor-pointer hover:bg-indigo-700 shadow-lg shadow-indigo-600/20"
               >
                 เข้าใจแล้ว
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
