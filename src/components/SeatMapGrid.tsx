@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v3 positions so the new layout defaults show up automatically
+      // Clear old v4 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v4') {
+      if (version !== 'v5') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v4');
+        localStorage.setItem('boat_seat_positions_version', 'v5');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
@@ -254,41 +254,74 @@ export default function SeatMapGrid({
 
     const match = seatId.match(/^(\d+)([A-F])$/);
     if (!match) return { left: '50%', top: '50%' };
-    const rowNum = parseInt(match[1]);   // 1-22 for CTB, 1-21 for R
-    const col = match[2];               // A-F
+    const rowNum = parseInt(match[1]);
+    const col = match[2];
 
     if (isCTB) {
-      // CTB Layout_CTB_Boat.jpg: seats span left 28.5% to 80%, 22 columns
-      // Top rows (port side): A row ~27%, B row ~35%, C row ~43%
-      // Center rows: D row ~49%, E row ~53% (center section only cols 4-13)
-      // Bottom rows (starboard): E row ~62%, F row ~70%
-      // The seat numbering goes as a snake: col 1 is at leftmost (28.5%), col 22 at rightmost (80%)
-      const leftPct = 28.5 + (rowNum - 1) * ((80.0 - 28.5) / 21);
+      // CTB: 130 seats generated in order (r=1..22, c=A..F, skip 22E,22F)
+      // Layout: top 3×15=45, center 4×10=40, bottom 3×15=45 → total 130
+      //
+      // Compute the sequential index of this seat in the generation order.
+      const colOrder = ['A', 'B', 'C', 'D', 'E', 'F'];
+      const colIdx = colOrder.indexOf(col);
+      if (colIdx < 0) return { left: '50%', top: '50%' };
+      
+      // Seats 22E and 22F don't exist
+      if (rowNum === 22 && colIdx >= 4) return { left: '50%', top: '50%' };
+      
+      const seatIndex = (rowNum - 1) * 6 + colIdx;
+      if (seatIndex < 0 || seatIndex >= 130) return { left: '50%', top: '50%' };
 
+      // Map sequential index → physical position on CTB layout image
+      // Image: bow on right (~80%), stern on left (~28.5%)
+      // Top section: 3 rows × 15 cols from stern to bow
+      const topLeftStart  = 28.5;
+      const topLeftEnd    = 80.0;
+      const topLeftStep   = (topLeftEnd - topLeftStart) / 14; // 15 positions → 14 gaps
+
+      // Center section: 4 rows × 10 cols (shorter, doesn't reach extreme ends)
+      const ctrLeftStart  = 37.0;
+      const ctrLeftEnd    = 76.5;
+      const ctrLeftStep   = (ctrLeftEnd - ctrLeftStart) / 9; // 10 positions → 9 gaps
+
+      let leftPct: number;
       let topPct: number;
-      if (col === 'A') topPct = 27.0;
-      else if (col === 'B') topPct = 35.0;
-      else if (col === 'C') topPct = 43.0;
-      else if (col === 'D') topPct = 49.0;
-      else if (col === 'E') topPct = 53.5;
-      else topPct = 62.0;  // F
+
+      if (seatIndex < 45) {
+        // TOP section: 3 rows × 15 seats
+        const physRow = Math.floor(seatIndex / 15); // 0, 1, 2
+        const physCol = seatIndex % 15;              // 0..14 (stern→bow)
+        leftPct = topLeftStart + physCol * topLeftStep;
+        topPct  = [25.5, 33.0, 41.0][physRow];
+      } else if (seatIndex < 85) {
+        // CENTER section: 4 rows × 10 seats
+        const i = seatIndex - 45;
+        const physRow = Math.floor(i / 10); // 0, 1, 2, 3
+        const physCol = i % 10;              // 0..9 (stern→bow)
+        leftPct = ctrLeftStart + physCol * ctrLeftStep;
+        topPct  = [47.0, 51.5, 56.0, 60.5][physRow];
+      } else {
+        // BOTTOM section: 3 rows × 15 seats
+        const i = seatIndex - 85;
+        const physRow = Math.floor(i / 15); // 0, 1, 2
+        const physCol = i % 15;              // 0..14 (stern→bow)
+        leftPct = topLeftStart + physCol * topLeftStep;
+        topPct  = [63.5, 71.0, 78.5][physRow];
+      }
 
       return { left: `${leftPct.toFixed(2)}%`, top: `${topPct}%` };
-    } else {
-      // R Boat Layout_R_Boat.png
-      // Columns 1 (leftmost/stern ~20%) to 21 (rightmost/bow ~74%)
-      // Upperdeck (port side, rows A-C): top ~17%, 24%, 31%
-      // Maindeck (starboard side, rows D-F): top ~59%, 66%, 73%
-      const leftPct = 20.0 + (rowNum - 1) * ((74.0 - 20.0) / 20);
 
+    } else {
+      // R Boat: seats span Upperdeck (port A,B,C) and Maindeck (starboard D,E,F)
+      // rowNum 1-21, each col spans full length
+      const leftPct = 20.0 + (rowNum - 1) * ((74.0 - 20.0) / 20);
       let topPct: number;
-      if (col === 'A') topPct = 17.0;
+      if      (col === 'A') topPct = 17.0;
       else if (col === 'B') topPct = 24.0;
       else if (col === 'C') topPct = 31.0;
       else if (col === 'D') topPct = 59.0;
       else if (col === 'E') topPct = 66.0;
-      else topPct = 73.0;  // F
-
+      else                  topPct = 73.0; // F
       return { left: `${leftPct.toFixed(2)}%`, top: `${topPct}%` };
     }
   };
