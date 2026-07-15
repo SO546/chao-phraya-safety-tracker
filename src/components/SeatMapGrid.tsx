@@ -254,6 +254,9 @@ export default function SeatMapGrid({
     setTimeout(() => setShowSavedToast(false), 2500);
   }, [customPositions]);
 
+  const isCTB = boatName ? boatName.toUpperCase().startsWith('CTB') : true;
+  const layoutImg = isCTB ? ctbLayoutImg : rLayoutImg;
+
   // Cabinet status indicator positions for CTB and R boats
   const cabinetPositions = isCTB
     ? [
@@ -269,9 +272,6 @@ export default function SeatMapGrid({
         { x: 60.0, y: 73.0, label: '3', key: 'whistleStatus', name: 'นกหวีด', desc: 'นกหวีด (Whistle) — จุดที่ 3 หัวเรือชั้นล่าง' },
         { x: 18.0, y: 73.0, label: '4', key: 'lightStatus', name: 'ไฟสัญญาณ', desc: 'ไฟสัญญาณ (Indicator Light) — จุดที่ 4 ท้ายเรือชั้นล่าง' },
       ];
-
-  const isCTB = boatName ? boatName.toUpperCase().startsWith('CTB') : true;
-  const layoutImg = isCTB ? ctbLayoutImg : rLayoutImg;
 
   // Calculate dynamic maxRows based on actual seats
   const maxRows = seats && seats.length > 0
