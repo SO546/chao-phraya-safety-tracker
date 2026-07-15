@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v5 positions so the new layout defaults show up automatically
+      // Clear old v6 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v6') {
+      if (version !== 'v7') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v6');
+        localStorage.setItem('boat_seat_positions_version', 'v7');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
@@ -510,10 +510,10 @@ export default function SeatMapGrid({
               {seats?.map((seat) => {
                 const statusColor = 
                   seat.status === 'green' 
-                    ? 'bg-emerald-500 hover:bg-emerald-450 border-emerald-600 text-slate-950 shadow-[0_0_6px_rgba(16,185,129,0.5)]' 
+                    ? 'bg-transparent border-none shadow-none text-transparent' 
                     : seat.status === 'red'
-                    ? 'bg-rose-600 hover:bg-rose-550 border-rose-700 text-slate-950 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)] border-red-500'
-                    : 'bg-amber-500 hover:bg-amber-455 border-amber-600 text-slate-950 shadow-[0_0_6px_rgba(245,158,11,0.5)]';
+                    ? 'bg-rose-600 hover:bg-rose-550 border border-rose-700 text-slate-950 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)] border-red-500'
+                    : 'bg-amber-500 hover:bg-amber-455 border border-amber-600 text-slate-950 shadow-[0_0_6px_rgba(245,158,11,0.5)]';
 
                 return (
                   <button
@@ -522,28 +522,17 @@ export default function SeatMapGrid({
                     onMouseDown={(e) => handleMouseDown(seat.id, e)}
                     onTouchStart={(e) => handleTouchStart(seat.id, e)}
                     style={getSeatCoords(seat.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full border flex items-center justify-center font-mono font-extrabold text-[7px] transition-all z-20 ${statusColor} cursor-move hover:scale-130 active:scale-95`}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center font-mono font-extrabold text-[7px] transition-all z-20 cursor-move hover:scale-130 active:scale-95 ${statusColor}`}
                     title={`ที่นั่ง ${seat.id}: ${
                       seat.status === 'green' ? 'มีเสื้อชูชีพปกติ' : seat.status === 'red' ? 'ไม่มีเสื้อชูชีพ' : 'มีเสื้อชูชีพแต่ชำรุด/เก่า'
                     } (คลิกเพื่อเปลี่ยนสถานะ / ลากเพื่อจัดตำแหน่งได้)`}
                   >
                     {seat.status === 'green' ? (
-                      <svg 
-                        viewBox="0 0 24 24" 
-                        width="11" 
-                        height="11" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        strokeWidth="2.5" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"
-                        className="w-[11px] h-[11px]"
-                      >
-                        <path d="M5 3h4v17H7a2 2 0 0 1-2-2V3z" />
-                        <path d="M19 3h-4v17h2a2 2 0 0 0 2-2V3z" />
-                        <path d="M9 8h6" />
-                        <path d="M9 13h6" />
-                      </svg>
+                      <img 
+                        src="/Life Jacket.png" 
+                        alt="Life Jacket" 
+                        className="w-full h-full object-contain"
+                      />
                     ) : (
                       seat.id
                     )}
