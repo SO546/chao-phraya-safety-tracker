@@ -18,8 +18,8 @@ import {
 import { BoatLifeJacketState, LifeJacketInspectionRecord, LifeJacketItemStatus, OverallStatus, BoatSeatLifeJacket } from '../types';
 import ImageUpload from './ImageUpload';
 
-const ctbLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/ctb_boat_layout.jpg';
-const rLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/r_boat_layout.jpg';
+const ctbLayoutImg = '/Layout_CTB_Boat.jpg';
+const rLayoutImg = '/Layout_R_Boat.png';
 
 // Helper to generate dynamic 6-column seats (13 rows for CTB, 10 rows for R)
 const generateDefaultSeats = (boatName?: string): BoatSeatLifeJacket[] => {
@@ -366,6 +366,36 @@ export default function LifeJacketSection({
                 <span className="text-slate-500">ชูชีพเด็ก:</span> <strong className="text-slate-950">{activeBoat.totalKids} ตัว</strong>
               </div>
               {getStatusBadge(activeBoat.overallStatus)}
+            </div>
+          </div>
+        )}
+
+        {/* Boat Layout Image */}
+        {activeBoat && (
+          <div className="border-b border-slate-200">
+            <div className="px-5 py-3 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🗺️</span>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                  แผนผังตำแหน่งเสื้อชูชีพบนเรือ {activeBoat.boatName}
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 font-mono">
+                {activeBoat.boatName.startsWith('CTB') ? 'CTB BOAT LAYOUT' : 'R BOAT LAYOUT'}
+              </span>
+            </div>
+            <div className="p-4 flex justify-center bg-white">
+              <img
+                src={activeBoat.boatName.startsWith('CTB') ? ctbLayoutImg : rLayoutImg}
+                alt={`แผนผังเรือ ${activeBoat.boatName}`}
+                className="max-w-full h-auto rounded border border-slate-200 shadow-sm"
+                style={{ maxHeight: '350px', objectFit: 'contain' }}
+              />
+            </div>
+            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200">
+              <p className="text-[10px] text-slate-500 text-center font-medium">
+                📍 จุดสีแดงแสดงตำแหน่งติดตั้งถังดับเพลิง/เสื้อชูชีพ | หมายเลขวงกลมแสดงลำดับอุปกรณ์ประจำเรือ
+              </p>
             </div>
           </div>
         )}

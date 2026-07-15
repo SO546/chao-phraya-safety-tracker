@@ -2,8 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Map, Grid } from 'lucide-react';
 import { BoatSeatLifeJacket, LifeJacketItemStatus } from '../types';
 
-const ctbLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/ctb_boat_layout.jpg';
-const rLayoutImg = 'https://ais-pre-mo3pir7chh5cim3ds2rnna-198914928716.asia-east1.run.app/r_boat_layout.jpg';
+const ctbLayoutImg = '/Layout_CTB_Boat.jpg';
+const rLayoutImg = '/Layout_R_Boat.png';
 
 interface SeatMapGridProps {
   seats: BoatSeatLifeJacket[];

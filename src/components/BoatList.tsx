@@ -132,6 +132,36 @@ export default function BoatList({
         ))}
       </div>
 
+      {/* Boat Layout Image - shown when a specific boat is selected */}
+      {selectedBoat && (
+        <div className="bg-white border border-slate-300 rounded-lg overflow-hidden shadow-sm">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🗺️</span>
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                แผนผังตำแหน่งถังดับเพลิงบนเรือ {selectedBoat.name}
+              </h3>
+            </div>
+            <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 font-mono">
+              {selectedBoat.name.startsWith('CTB') ? 'CTB BOAT LAYOUT' : 'R BOAT LAYOUT'}
+            </span>
+          </div>
+          <div className="p-4 flex justify-center bg-white">
+            <img
+              src={selectedBoat.name.startsWith('CTB') ? '/Layout_CTB_Boat.jpg' : '/Layout_R_Boat.png'}
+              alt={`แผนผังเรือ ${selectedBoat.name}`}
+              className="max-w-full h-auto rounded border border-slate-200 shadow-sm"
+              style={{ maxHeight: '400px', objectFit: 'contain' }}
+            />
+          </div>
+          <div className="px-4 py-2 bg-slate-50 border-t border-slate-200">
+            <p className="text-[10px] text-slate-500 text-center font-medium">
+              📍 จุดสีแดงแสดงตำแหน่งติดตั้งถังดับเพลิง | หมายเลขวงกลมแสดงลำดับถังประจำเรือ
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Grid of fire extinguisher cards */}
       {filteredExtinguishers.length === 0 ? (
         <div className="py-20 text-center bg-white border border-dashed border-slate-350 rounded flex flex-col items-center justify-center space-y-3">
