@@ -20,6 +20,193 @@ interface SeatMapGridProps {
   onCabinetClick?: (pointIndex: number) => void;
 }
 
+
+
+// Precomputed seat grid positions for CTB boats (Layout_CTB_Boat.jpg)
+const ctbSeatGridMap: Record<string, { col: number; row: number }> = (() => {
+  const map: Record<string, { col: number; row: number }> = {};
+  
+  // 1. Port side (Rows 0-2, Columns 0-14)
+  const portSeats = [
+    ['1C', '22B', '21B'],
+    ['18B', '19B', '20B'],
+    ['17B', '16B', '15B'],
+    ['12B', '13B', '14B'],
+    ['11B', '10B', '9B'],
+    ['6B', '7B', '8B'],
+    ['3B', '4B', '5B'],
+    ['2B', '1B', '1A'],
+    ['4A', '3A', '2A'],
+    ['5A', '6A', '7A'],
+    ['10A', '9A', '8A'],
+    ['11A', '12A', '13A'],
+    ['16A', '15A', '14A'],
+    ['17A', '18A', '19A'],
+    ['22A', '21A', '20A']
+  ];
+  for (let c = 0; c < 15; c++) {
+    for (let r = 0; r < 3; r++) {
+      if (portSeats[c] && portSeats[c][r]) {
+        map[portSeats[c][r]] = { col: c, row: r };
+      }
+    }
+  }
+
+  // 2. Center side (Rows 3-6, Columns 5-14)
+  const centerSeats = [
+    ['19D', '18D', '17D', '16D'],
+    ['12D', '13D', '14D', '15D'],
+    ['11D', '10D', '9D', '8D'],
+    ['4D', '5D', '6D', '7D'],
+    ['3D', '2D', '1D', '2C'],
+    ['5C', '4C', '3C', '6C'],
+    ['9C', '8C', '7C', '10C'],
+    ['11C', '12C', '13C', '14C'],
+    ['17C', '16C', '15C', '18C'],
+    ['19C', '20D', '21D', '22D']
+  ];
+  for (let c = 0; c < 10; c++) {
+    for (let r = 0; r < 4; r++) {
+      if (centerSeats[c] && centerSeats[c][r]) {
+        map[centerSeats[c][r]] = { col: c + 5, row: r + 3 };
+      }
+    }
+  }
+
+  // 3. Starboard side (Rows 7-9, Columns 0-14)
+  const starboardSeats = [
+    ['21F', '20F', '19F'],
+    ['16F', '17F', '18F'],
+    ['15F', '14F', '13F'],
+    ['10F', '11F', '12F'],
+    ['9F', '8F', '7F'],
+    ['4F', '5F', '6F'],
+    ['3F', '2F', '1F'],
+    ['1E', '2E', '3E'],
+    ['6E', '5E', '4E'],
+    ['7E', '8E', '9E'],
+    ['12E', '11E', '10E'],
+    ['13E', '14E', '15E'],
+    ['18E', '17E', '16E'],
+    ['19E', '20E', '21E'],
+    ['22C', '21C', '20C']
+  ];
+  for (let c = 0; c < 15; c++) {
+    for (let r = 0; r < 3; r++) {
+      if (starboardSeats[c] && starboardSeats[c][r]) {
+        map[starboardSeats[c][r]] = { col: c, row: r + 7 };
+      }
+    }
+  }
+
+  return map;
+})();
+
+// Precomputed seat grid positions for R boats (Layout_R_Boat.png)
+const rSeatGridMap: Record<string, { col: number; row: number }> = (() => {
+  const map: Record<string, { col: number; row: number }> = {};
+  
+  // Port side block (columns A, B, C) mapped to columns 0 to 20, rows 0 to 2
+  for (let colIdx = 0; colIdx < 21; colIdx++) {
+    let r1, r2, r3;
+    if (colIdx >= 14) { // Columns 14-20: A seats
+      const aGroupIdx = 20 - colIdx;
+      const baseRow = aGroupIdx * 3 + 1;
+      const isDescending = colIdx === 17 || colIdx === 15;
+      if (isDescending) {
+        r1 = `${baseRow + 2}A`;
+        r2 = `${baseRow + 1}A`;
+        r3 = `${baseRow}A`;
+      } else {
+        r1 = `${baseRow}A`;
+        r2 = `${baseRow + 1}A`;
+        r3 = `${baseRow + 2}A`;
+      }
+    } else if (colIdx >= 7) { // Columns 7-13: B seats
+      const bGroupIdx = 13 - colIdx;
+      const baseRow = bGroupIdx * 3 + 1;
+      const isDescending = colIdx === 11 || colIdx === 9 || colIdx === 7;
+      if (isDescending) {
+        r1 = `${baseRow + 2}B`;
+        r2 = `${baseRow + 1}B`;
+        r3 = `${baseRow}B`;
+      } else {
+        r1 = `${baseRow}B`;
+        r2 = `${baseRow + 1}B`;
+        r3 = `${baseRow + 2}B`;
+      }
+    } else { // Columns 0-6: C seats
+      const cGroupIdx = 6 - colIdx;
+      const baseRow = cGroupIdx * 3 + 1;
+      const isDescending = colIdx === 4 || colIdx === 2 || colIdx === 0;
+      if (isDescending) {
+        r1 = `${baseRow + 2}C`;
+        r2 = `${baseRow + 1}C`;
+        r3 = `${baseRow}C`;
+      } else {
+        r1 = `${baseRow}C`;
+        r2 = `${baseRow + 1}C`;
+        r3 = `${baseRow + 2}C`;
+      }
+    }
+    
+    map[r1] = { col: colIdx, row: 0 };
+    map[r2] = { col: colIdx, row: 1 };
+    map[r3] = { col: colIdx, row: 2 };
+  }
+
+  // Starboard side block (columns D, E, F) mapped to columns 0 to 20, rows 3 to 5
+  for (let colIdx = 0; colIdx < 21; colIdx++) {
+    let r1, r2, r3;
+    if (colIdx >= 14) { // Columns 14-20: D seats
+      const dGroupIdx = 20 - colIdx;
+      const baseRow = dGroupIdx * 3 + 1;
+      const isDescending = colIdx === 17 || colIdx === 15;
+      if (isDescending) {
+        r1 = `${baseRow + 2}D`;
+        r2 = `${baseRow + 1}D`;
+        r3 = `${baseRow}D`;
+      } else {
+        r1 = `${baseRow}D`;
+        r2 = `${baseRow + 1}D`;
+        r3 = `${baseRow + 2}D`;
+      }
+    } else if (colIdx >= 7) { // Columns 7-13: E seats
+      const eGroupIdx = 13 - colIdx;
+      const baseRow = eGroupIdx * 3 + 1;
+      const isDescending = colIdx === 11 || colIdx === 9 || colIdx === 7;
+      if (isDescending) {
+        r1 = `${baseRow + 2}E`;
+        r2 = `${baseRow + 1}E`;
+        r3 = `${baseRow}E`;
+      } else {
+        r1 = `${baseRow}E`;
+        r2 = `${baseRow + 1}E`;
+        r3 = `${baseRow + 2}E`;
+      }
+    } else { // Columns 0-6: F seats
+      const fGroupIdx = 6 - colIdx;
+      const baseRow = fGroupIdx * 3 + 1;
+      const isDescending = colIdx === 4 || colIdx === 2 || colIdx === 0;
+      if (isDescending) {
+        r1 = `${baseRow + 2}F`;
+        r2 = `${baseRow + 1}F`;
+        r3 = `${baseRow}F`;
+      } else {
+        r1 = `${baseRow}F`;
+        r2 = `${baseRow + 1}F`;
+        r3 = `${baseRow + 2}F`;
+      }
+    }
+    
+    map[r1] = { col: colIdx, row: 3 };
+    map[r2] = { col: colIdx, row: 4 };
+    map[r3] = { col: colIdx, row: 5 };
+  }
+
+  return map;
+})();
+
 export default function SeatMapGrid({ 
   seats, 
   interactive, 
@@ -34,6 +221,13 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
+      // Clear old v1 positions so the new layout defaults show up automatically
+      const version = localStorage.getItem('boat_seat_positions_version');
+      if (version !== 'v2') {
+        localStorage.removeItem('boat_seat_positions');
+        localStorage.setItem('boat_seat_positions_version', 'v2');
+        return {};
+      }
       const saved = localStorage.getItem('boat_seat_positions');
       return saved ? JSON.parse(saved) : {};
     } catch (e) {
@@ -58,33 +252,21 @@ export default function SeatMapGrid({
       return customPositions[boatKey][seatId];
     }
 
-    const match = seatId.match(/^(\d+)([A-F])$/);
-    if (!match) return { left: '0%', top: '0%' };
-    const rowNum = parseInt(match[1]);
-    const col = match[2];
-    
-    let left = 0;
-    let top = 0;
-
     if (isCTB) {
-      left = 28.5 + (rowNum - 1) * ((80.0 - 28.5) / (maxRows - 1));
-      if (col === 'A') top = 26.5;
-      else if (col === 'B') top = 34.5;
-      else if (col === 'C') top = 42.5;
-      else if (col === 'D') top = 56.5;
-      else if (col === 'E') top = 64.5;
-      else if (col === 'F') top = 72.5;
+      const pos = ctbSeatGridMap[seatId];
+      if (!pos) return { left: '0%', top: '0%' };
+      const left = 28.5 + pos.col * ((80.0 - 28.5) / 14);
+      const topMap = [26.5, 34.5, 42.5, 46.5, 49.5, 52.5, 55.5, 60.5, 67.5, 74.5];
+      const top = topMap[pos.row];
+      return { left: `${left}%`, top: `${top}%` };
     } else {
-      left = 24.0 + (rowNum - 1) * ((72.0 - 24.0) / (maxRows - 1));
-      if (col === 'A') top = 21.0;
-      else if (col === 'B') top = 29.0;
-      else if (col === 'C') top = 37.0;
-      else if (col === 'D') top = 51.0;
-      else if (col === 'E') top = 59.0;
-      else if (col === 'F') top = 67.0;
+      const pos = rSeatGridMap[seatId];
+      if (!pos) return { left: '0%', top: '0%' };
+      const left = 18.0 + pos.col * ((72.0 - 18.0) / 20);
+      const topMap = [14.0, 21.0, 28.0, 55.0, 62.0, 69.0];
+      const top = topMap[pos.row];
+      return { left: `${left}%`, top: `${top}%` };
     }
-
-    return { left: `${left}%`, top: `${top}%` };
   };
 
   const handleResetPositions = () => {
