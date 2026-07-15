@@ -1524,6 +1524,59 @@ export default function App() {
     triggerToast('ล้างประวัติเครื่องและการบันทึกในหมวดหมู่ที่เลือกเรียบร้อยแล้ว', 'info');
   };
 
+  // Restore local storage from backup JSON
+  const handleRestoreBackup = (backupData: any) => {
+    try {
+      if (backupData.boat_fire_extinguishers) {
+        setExtinguishers(JSON.parse(backupData.boat_fire_extinguishers));
+        localStorage.setItem('boat_fire_extinguishers', backupData.boat_fire_extinguishers);
+      }
+      if (backupData.boat_inspection_history) {
+        setHistory(JSON.parse(backupData.boat_inspection_history));
+        localStorage.setItem('boat_inspection_history', backupData.boat_inspection_history);
+      }
+      if (backupData.boat_medical_stations) {
+        setMedicalStations(JSON.parse(backupData.boat_medical_stations));
+        localStorage.setItem('boat_medical_stations', backupData.boat_medical_stations);
+      }
+      if (backupData.boat_medical_history) {
+        setMedicalHistory(JSON.parse(backupData.boat_medical_history));
+        localStorage.setItem('boat_medical_history', backupData.boat_medical_history);
+      }
+      if (backupData.boat_licenses) {
+        setBoatLicenses(JSON.parse(backupData.boat_licenses));
+        localStorage.setItem('boat_licenses', backupData.boat_licenses);
+      }
+      if (backupData.boat_license_history) {
+        setLicenseHistory(JSON.parse(backupData.boat_license_history));
+        localStorage.setItem('boat_license_history', backupData.boat_license_history);
+      }
+      if (backupData.boat_life_jackets) {
+        setLifeJackets(JSON.parse(backupData.boat_life_jackets));
+        localStorage.setItem('boat_life_jackets', backupData.boat_life_jackets);
+      }
+      if (backupData.boat_life_jacket_history) {
+        setLifeJacketHistory(JSON.parse(backupData.boat_life_jacket_history));
+        localStorage.setItem('boat_life_jacket_history', backupData.boat_life_jacket_history);
+      }
+      if (backupData.boat_maintenance_history) {
+        setMaintenanceRecords(JSON.parse(backupData.boat_maintenance_history));
+        localStorage.setItem('boat_maintenance_history', backupData.boat_maintenance_history);
+      }
+      if (backupData.boat_sheets_config) {
+        setSheetsConfig(JSON.parse(backupData.boat_sheets_config));
+        localStorage.setItem('boat_sheets_config', backupData.boat_sheets_config);
+      }
+      if (backupData.boat_seat_positions) {
+        localStorage.setItem('boat_seat_positions', backupData.boat_seat_positions);
+      }
+      triggerToast('กู้คืนข้อมูลสำรองจากไฟล์ JSON สำเร็จแล้ว!', 'success');
+    } catch (err) {
+      console.error('Restore Error:', err);
+      triggerToast('เกิดข้อผิดพลาดในการนำเข้าไฟล์ข้อมูลสำรอง', 'error');
+    }
+  };
+
   // Nav to specific boat inspection lists
   const handleSelectBoat = (boatId: string | null) => {
     setSelectedBoatId(boatId);
@@ -1912,6 +1965,7 @@ export default function App() {
                   onDeleteRecord={handleDeleteUnifiedRecord}
                   onAddRectificationPhoto={handleAddRectificationPhoto}
                   onShowConfirm={showConfirm}
+                  onRestoreBackup={handleRestoreBackup}
                 />
               )}
 

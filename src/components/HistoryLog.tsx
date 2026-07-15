@@ -18,7 +18,10 @@ import {
   Eye,
   ChevronDown,
   ImagePlus,
-  Camera
+  Camera,
+  FileJson,
+  Download,
+  Upload
 } from 'lucide-react';
 import { 
   InspectionRecord, 
@@ -36,6 +39,7 @@ interface HistoryLogProps {
   onDeleteRecord?: (id: string, category: 'extinguisher' | 'lifejacket' | 'license' | 'medical') => void;
   onAddRectificationPhoto?: (id: string, category: 'extinguisher' | 'lifejacket' | 'license' | 'medical', photoUrl: string) => void;
   onShowConfirm?: (title: string, message: string, onConfirm: () => void) => void;
+  onRestoreBackup?: (backupData: any) => void;
 }
 
 export default function HistoryLog({ 
@@ -46,7 +50,8 @@ export default function HistoryLog({
   onClearHistory,
   onDeleteRecord,
   onAddRectificationPhoto,
-  onShowConfirm
+  onShowConfirm,
+  onRestoreBackup
 }: HistoryLogProps) {
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'extinguisher' | 'lifejacket' | 'license' | 'medical'>('all');
   const [boatFilter, setBoatFilter] = useState('all');
@@ -74,6 +79,81 @@ export default function HistoryLog({
   ];
 
   const yearsList = ['2026', '2027', '2028', '2029', '2030', '2031'];
+
+  const handleExportBackup = () => {
+    const backupData = {
+      boat_fire_extinguishers: window.localStorage.getItem('boat_fire_extinguishers'),
+      boat_inspection_history: window.localStorage.getItem('boat_inspection_history'),
+      boat_medical_stations: window.localStorage.getItem('boat_medical_stations'),
+      boat_medical_history: window.localStorage.getItem('boat_medical_history'),
+      boat_licenses: window.localStorage.getItem('boat_licenses'),
+      boat_license_history: window.localStorage.getItem('boat_license_history'),
+      boat_life_jackets: window.localStorage.getItem('boat_life_jackets'),
+      boat_life_jacket_history: window.localStorage.getItem('boat_life_jacket_history'),
+      boat_maintenance_history: window.localStorage.getItem('boat_maintenance_history'),
+      boat_sheets_config: window.localStorage.getItem('boat_sheets_config'),
+      boat_seat_positions: window.localStorage.getItem('boat_seat_positions'),
+      backup_timestamp: new Date().toISOString(),
+    };
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `maritime_safety_backup_${new Date().toISOString().substring(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        
+        // Basic check to see if it is our backup file format
+        const keys = [
+          'boat_fire_extinguishers',
+          'boat_inspection_history',
+          'boat_medical_stations',
+          'boat_medical_history',
+          'boat_licenses',
+          'boat_license_history',
+          'boat_life_jackets',
+          'boat_life_jacket_history'
+        ];
+        
+        const hasSomeKeys = keys.some(key => key in parsed);
+        if (!hasSomeKeys) {
+          alert('ไฟล์ที่นำเข้ามาไม่ใช่รูปแบบไฟล์สำรองข้อมูลของระบบนี้ กรุณาเลือกไฟล์สำรองข้อมูล JSON ที่ถูกต้อง');
+          return;
+        }
+
+        const confirmMsg = 'คุณแน่ใจหรือไม่ที่จะทำการเขียนทับข้อมูลในเครื่องปัจจุบันทั้งหมดด้วยข้อมูลจากไฟล์สำรองนี้? การทำรายการนี้จะไม่สามารถกู้คืนได้';
+        if (onShowConfirm) {
+          onShowConfirm('ยืนยันการกู้คืนข้อมูล', confirmMsg, () => {
+            if (onRestoreBackup) {
+              onRestoreBackup(parsed);
+            }
+          });
+        } else {
+          const isConfirmed = window.confirm(confirmMsg);
+          if (isConfirmed && onRestoreBackup) {
+            onRestoreBackup(parsed);
+          }
+        }
+      } catch (err) {
+        alert('เกิดข้อผิดพลาดในการอ่านไฟล์ JSON กรุณาตรวจสอบว่าไฟล์ไม่เสียหาย');
+      }
+    };
+    reader.readAsText(file);
+    
+    // Clear input so same file can be uploaded again if needed
+    e.target.value = '';
+  };
 
   // --- Map and unify all records ---
   interface UnifiedRecord {
@@ -288,6 +368,72 @@ export default function HistoryLog({
             <span>ล้างประวัติ ({categoryFilter === 'all' ? 'ทั้งหมด' : 'เฉพาะหมวด'})</span>
           </button>
         )}
+      </div>
+
+      {/* JSON Backup & Restore System */}
+      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-350 space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+          <span className="p-1.5 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200">
+            <FileJson className="h-4 w-4" />
+          </span>
+          <div>
+            <h3 className="font-extrabold text-sm text-slate-950">
+              ระบบสำรองและกู้คืนข้อมูลผ่านไฟล์ JSON (Data Backup & Recovery)
+            </h3>
+            <p className="text-[11px] text-slate-500 font-bold">
+              สำรองข้อมูลประวัติทั้งหมด พิกัดเก้าอี้ และการตั้งค่าลงเครื่อง หรือนำข้อมูลสำรองเก่ากลับมาใช้งานใหม่
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
+          {/* Export / Backup Section */}
+          <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-250 flex flex-col justify-between">
+            <div>
+              <h4 className="font-extrabold text-xs text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                📥 สำรองข้อมูลระบบ (Export JSON Backup)
+              </h4>
+              <p className="text-[11.5px] text-slate-600 leading-relaxed mt-2 font-medium">
+                ดาวน์โหลดไฟล์ข้อมูลความปลอดภัยย้อนหลังทั้งหมดของกองเรือ รวมถึงพิกัดตำแหน่งเสื้อชูชีพและถังดับเพลิง บันทึกเวชภัณฑ์ และใบอนุญาต เพื่อเก็บไว้เป็นหลักฐานภายนอก
+              </p>
+            </div>
+            <button
+              onClick={handleExportBackup}
+              className="mt-4 w-full py-2.5 bg-indigo-650 hover:bg-indigo-750 text-white font-extrabold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <Download className="h-4 w-4" />
+              <span>ดาวน์โหลดไฟล์สำรองข้อมูล (.json)</span>
+            </button>
+          </div>
+
+          {/* Import / Restore Section */}
+          <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-250 flex flex-col justify-between">
+            <div>
+              <h4 className="font-extrabold text-xs text-rose-950 uppercase tracking-wider flex items-center gap-1.5">
+                📤 กู้คืนข้อมูลระบบ (Import JSON Backup)
+              </h4>
+              <p className="text-[11.5px] text-slate-600 leading-relaxed mt-2 font-medium text-rose-800">
+                ⚠️ คำเตือน: การกู้คืนข้อมูลผ่านไฟล์ JSON จะเขียนข้อมูลทับประวัติการตรวจในเบราว์เซอร์ปัจจุบันทันที กรุณาตรวจสอบให้แน่ใจว่าไฟล์ที่นำเข้ามานั้นถูกต้อง
+              </p>
+            </div>
+            <div className="relative mt-4">
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportBackup}
+                id="json-backup-upload"
+                className="hidden"
+              />
+              <label
+                htmlFor="json-backup-upload"
+                className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-250 font-extrabold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-3xs"
+              >
+                <Upload className="h-4 w-4" />
+                <span>นำเข้าและกู้คืนข้อมูลจากไฟล์ JSON</span>
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 1. Category Switch Tabs */}
