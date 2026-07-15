@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { Map, Grid, Save, CheckCircle2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Map, Grid } from 'lucide-react';
 import { BoatSeatLifeJacket, LifeJacketItemStatus } from '../types';
 
 const ctbLayoutImg = '/Layout_CTB_Boat.jpg';
@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v2 positions so the new layout defaults show up automatically
+      // Clear old v3 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v3') {
+      if (version !== 'v4') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v3');
+        localStorage.setItem('boat_seat_positions_version', 'v4');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
@@ -235,43 +235,8 @@ export default function SeatMapGrid({
     }
   });
 
-  // Track whether positions have been modified since last explicit save
-  const [savedPositionsSnapshot, setSavedPositionsSnapshot] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('boat_seat_positions');
-      return saved || '{}';
-    } catch { return '{}'; }
-  });
-  const [showSavedToast, setShowSavedToast] = useState(false);
-
-  const hasUnsavedChanges = JSON.stringify(customPositions) !== savedPositionsSnapshot;
-
-  const handleSavePositions = useCallback(() => {
-    const json = JSON.stringify(customPositions);
-    localStorage.setItem('boat_seat_positions', json);
-    setSavedPositionsSnapshot(json);
-    setShowSavedToast(true);
-    setTimeout(() => setShowSavedToast(false), 2500);
-  }, [customPositions]);
-
   const isCTB = boatName ? boatName.toUpperCase().startsWith('CTB') : true;
   const layoutImg = isCTB ? ctbLayoutImg : rLayoutImg;
-
-  // Cabinet status indicator positions for CTB and R boats
-  const cabinetPositions = isCTB
-    ? [
-        { x: 26.5, y: 28.5, label: '1', key: 'adultsStatus', name: 'ชูชีพผู้ใหญ่', desc: 'ชูชีพผู้ใหญ่ (Adults)' },
-        { x: 68.5, y: 20.0, label: '2', key: 'kidsStatus', name: 'ชูชีพเด็ก', desc: 'ชูชีพเด็ก (Kids)' },
-        { x: 68.5, y: 78.0, label: '3', key: 'whistleStatus', name: 'นกหวีด', desc: 'นกหวีด (Whistle)' },
-        { x: 26.5, y: 72.0, label: '4', key: 'lightStatus', name: 'ไฟสัญญาณ', desc: 'ไฟสัญญาณ (Indicator Light)' },
-        { x: 78.0, y: 42.0, label: '5', key: 'cabinetStatus', name: 'ตู้เก็บชูชีพ', desc: 'ตู้เก็บ/ที่จัดเก็บ (Storage Cabinet)' },
-      ]
-    : [
-        { x: 18.0, y: 14.0, label: '1', key: 'adultsStatus', name: 'ชูชีพผู้ใหญ่', desc: 'ชูชีพผู้ใหญ่ (Adults) — จุดที่ 1 ฝั่งซ้ายท้ายเรือ' },
-        { x: 58.0, y: 20.0, label: '2', key: 'kidsStatus', name: 'ชูชีพเด็ก', desc: 'ชูชีพเด็ก (Kids) — จุดที่ 2 หัวเรือชั้นบน' },
-        { x: 60.0, y: 73.0, label: '3', key: 'whistleStatus', name: 'นกหวีด', desc: 'นกหวีด (Whistle) — จุดที่ 3 หัวเรือชั้นล่าง' },
-        { x: 18.0, y: 73.0, label: '4', key: 'lightStatus', name: 'ไฟสัญญาณ', desc: 'ไฟสัญญาณ (Indicator Light) — จุดที่ 4 ท้ายเรือชั้นล่าง' },
-      ];
 
   // Calculate dynamic maxRows based on actual seats
   const maxRows = seats && seats.length > 0
@@ -287,20 +252,44 @@ export default function SeatMapGrid({
       return customPositions[boatKey][seatId];
     }
 
+    const match = seatId.match(/^(\d+)([A-F])$/);
+    if (!match) return { left: '50%', top: '50%' };
+    const rowNum = parseInt(match[1]);   // 1-22 for CTB, 1-21 for R
+    const col = match[2];               // A-F
+
     if (isCTB) {
-      const pos = ctbSeatGridMap[seatId];
-      if (!pos) return { left: '0%', top: '0%' };
-      const left = 28.5 + pos.col * ((80.0 - 28.5) / 14);
-      const topMap = [26.5, 34.5, 42.5, 46.5, 49.5, 52.5, 55.5, 60.5, 67.5, 74.5];
-      const top = topMap[pos.row];
-      return { left: `${left}%`, top: `${top}%` };
+      // CTB Layout_CTB_Boat.jpg: seats span left 28.5% to 80%, 22 columns
+      // Top rows (port side): A row ~27%, B row ~35%, C row ~43%
+      // Center rows: D row ~49%, E row ~53% (center section only cols 4-13)
+      // Bottom rows (starboard): E row ~62%, F row ~70%
+      // The seat numbering goes as a snake: col 1 is at leftmost (28.5%), col 22 at rightmost (80%)
+      const leftPct = 28.5 + (rowNum - 1) * ((80.0 - 28.5) / 21);
+
+      let topPct: number;
+      if (col === 'A') topPct = 27.0;
+      else if (col === 'B') topPct = 35.0;
+      else if (col === 'C') topPct = 43.0;
+      else if (col === 'D') topPct = 49.0;
+      else if (col === 'E') topPct = 53.5;
+      else topPct = 62.0;  // F
+
+      return { left: `${leftPct.toFixed(2)}%`, top: `${topPct}%` };
     } else {
-      const pos = rSeatGridMap[seatId];
-      if (!pos) return { left: '0%', top: '0%' };
-      const left = 18.0 + pos.col * ((72.0 - 18.0) / 20);
-      const topMap = [14.0, 21.0, 28.0, 35.0, 42.0, 49.0];
-      const top = topMap[pos.row];
-      return { left: `${left}%`, top: `${top}%` };
+      // R Boat Layout_R_Boat.png
+      // Columns 1 (leftmost/stern ~20%) to 21 (rightmost/bow ~74%)
+      // Upperdeck (port side, rows A-C): top ~17%, 24%, 31%
+      // Maindeck (starboard side, rows D-F): top ~59%, 66%, 73%
+      const leftPct = 20.0 + (rowNum - 1) * ((74.0 - 20.0) / 20);
+
+      let topPct: number;
+      if (col === 'A') topPct = 17.0;
+      else if (col === 'B') topPct = 24.0;
+      else if (col === 'C') topPct = 31.0;
+      else if (col === 'D') topPct = 59.0;
+      else if (col === 'E') topPct = 66.0;
+      else topPct = 73.0;  // F
+
+      return { left: `${leftPct.toFixed(2)}%`, top: `${topPct}%` };
     }
   };
 
@@ -434,25 +423,6 @@ export default function SeatMapGrid({
               🔄 รีเซ็ตจุด
             </button>
           )}
-          {/* Save Changes Button */}
-          <button
-            onClick={handleSavePositions}
-            className={`ml-2 text-[9px] font-black px-2.5 py-1 rounded cursor-pointer transition-all uppercase font-sans flex items-center gap-1 shadow-sm ${
-              hasUnsavedChanges
-                ? 'bg-teal-600 hover:bg-teal-700 text-white border border-teal-700 animate-pulse'
-                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300'
-            }`}
-            title="บันทึกตำแหน่งจุดที่ลากจัดเรียงไว้ลงเครื่อง"
-          >
-            <Save className="h-3 w-3" />
-            {hasUnsavedChanges ? '💾 บันทึกการเปลี่ยนแปลง' : '✅ บันทึกแล้ว'}
-          </button>
-          {/* Saved Toast */}
-          {showSavedToast && (
-            <span className="ml-2 text-[9px] font-bold text-emerald-600 flex items-center gap-1 animate-fade-in">
-              <CheckCircle2 className="h-3 w-3" /> บันทึกสำเร็จ!
-            </span>
-          )}
         </div>
         <div className="flex bg-white p-0.5 rounded border border-slate-300 text-[9px] md:text-[10px]">
           <button
@@ -525,27 +495,6 @@ export default function SeatMapGrid({
                     } (คลิกเพื่อเปลี่ยนสถานะ / ลากเพื่อจัดตำแหน่งได้)`}
                   >
                     {seat.id}
-                  </button>
-                );
-              })}
-
-              {/* Cabinet Status Indicator Points (numbered circles) */}
-              {cabinetStatuses && cabinetPositions.map((point, idx) => {
-                const statusKey = point.key as keyof typeof cabinetStatuses;
-                const status = cabinetStatuses[statusKey];
-                const pointColor = status === 'Normal'
-                  ? 'bg-emerald-500 border-emerald-700 shadow-[0_0_10px_rgba(16,185,129,0.6)]'
-                  : 'bg-rose-600 border-rose-800 animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.8)]';
-                return (
-                  <button
-                    key={`cabinet-${point.label}`}
-                    type="button"
-                    onClick={() => onCabinetClick && onCabinetClick(idx + 1)}
-                    style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border-2 flex items-center justify-center font-mono font-black text-[11px] text-white z-30 cursor-pointer hover:scale-125 active:scale-95 transition-all ${pointColor}`}
-                    title={`${point.desc}: ${status === 'Normal' ? '🟢 ปกติ' : '🔴 ผิดปกติ'} (คลิกเพื่อสลับสถานะ)`}
-                  >
-                    {point.label}
                   </button>
                 );
               })}
