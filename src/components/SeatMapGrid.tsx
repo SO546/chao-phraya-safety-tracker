@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v6 positions so the new layout defaults show up automatically
+      // Clear old v7 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v7') {
+      if (version !== 'v8') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v7');
+        localStorage.setItem('boat_seat_positions_version', 'v8');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
@@ -529,7 +529,7 @@ export default function SeatMapGrid({
                   >
                     {seat.status === 'green' ? (
                       <img 
-                        src="/Life Jacket.png" 
+                        src="/life_jacket.png" 
                         alt="Life Jacket" 
                         className="w-full h-full object-contain"
                       />
