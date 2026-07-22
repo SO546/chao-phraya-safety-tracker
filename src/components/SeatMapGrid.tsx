@@ -483,15 +483,7 @@ export default function SeatMapGrid({
               🔒 บันทึกแล้ว!
             </span>
           )}
-          {Object.keys(customPositions[boatName || 'Standard'] || {}).length > 0 && !hasPendingChanges && !savedConfirmed && (
-            <button
-              onClick={handleResetPositions}
-              className="ml-2 text-[9px] font-black text-slate-500 bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border border-slate-300 hover:border-rose-300 px-2 py-0.5 rounded cursor-pointer transition-all font-sans flex items-center gap-1"
-              title="ล้างพิกัดที่กำหนดเองทั้งหมด กลับสู่ตำแหน่งเริ่มต้น"
-            >
-              🔄 รีเซ็ต
-            </button>
-          )}
+
         </div>
         <div className="flex bg-white p-0.5 rounded border border-slate-300 text-[9px] md:text-[10px]">
           <button
