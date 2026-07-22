@@ -218,6 +218,18 @@ export default function SeatMapGrid({
   const [viewMode, setViewMode] = useState<'diagram' | 'table'>('diagram');
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
   const [savedConfirmed, setSavedConfirmed] = useState(false);
+  // isLocked: true after saving — blocks all drag interactions until user unlocks
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    try {
+      const version = localStorage.getItem('boat_seat_positions_version');
+      if (version !== 'v11') return false;
+      // If positions already exist for this boat, start locked
+      const saved = localStorage.getItem('boat_seat_positions');
+      if (!saved) return false;
+      const parsed = JSON.parse(saved);
+      return Object.keys(parsed).length > 0;
+    } catch { return false; }
+  });
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Load custom seat positions from localStorage
@@ -352,11 +364,23 @@ export default function SeatMapGrid({
     localStorage.setItem('boat_seat_positions', JSON.stringify(saved));
     setHasPendingChanges(false);
     setSavedConfirmed(true);
+    setIsLocked(true);
     setTimeout(() => setSavedConfirmed(false), 2500);
+  };
+
+  const handleUnlock = () => {
+    setIsLocked(false);
+    setHasPendingChanges(false);
+    setSavedConfirmed(false);
   };
 
   // Mouse drag handler for repositioning dots
   const handleMouseDown = (seatId: string, e: React.MouseEvent) => {
+    if (isLocked) {
+      // Locked: allow click-to-change-status but no dragging
+      if (interactive && onSeatClick) onSeatClick(seatId);
+      return;
+    }
     e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -408,6 +432,7 @@ export default function SeatMapGrid({
 
   // Touch drag handler for repositioning dots (mobile/tablet friendly)
   const handleTouchStart = (seatId: string, e: React.TouchEvent) => {
+    if (isLocked) return; // locked — no touch drag
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -469,7 +494,7 @@ export default function SeatMapGrid({
           <span className="text-[10px] md:text-[11px] font-bold text-slate-700 font-mono uppercase">
             🚢 {boatName || 'Standard'} Seat Map
           </span>
-          {hasPendingChanges && (
+          {hasPendingChanges && !isLocked && (
             <button
               onClick={handleSavePositions}
               className="ml-2 text-[9px] font-black text-emerald-900 bg-emerald-100 hover:bg-emerald-200 border border-emerald-400 px-2 py-0.5 rounded cursor-pointer transition-all font-sans flex items-center gap-1 animate-pulse"
@@ -478,10 +503,19 @@ export default function SeatMapGrid({
               ✅ ยืนยันและบันทึกจุด
             </button>
           )}
-          {savedConfirmed && (
-            <span className="ml-2 text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded font-sans flex items-center gap-1">
-              🔒 บันทึกแล้ว!
-            </span>
+          {isLocked && (
+            <>
+              <span className="ml-2 text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded font-sans flex items-center gap-1">
+                🔒 {savedConfirmed ? 'บันทึกแล้ว!' : 'ล็อคอยู่'}
+              </span>
+              <button
+                onClick={handleUnlock}
+                className="ml-1 text-[9px] font-black text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded cursor-pointer transition-all font-sans flex items-center gap-1"
+                title="ปลดล็อคเพื่อลากจัดวางตำแหน่งจุดใหม่"
+              >
+                🔓 ปลดล็อค
+              </button>
+            </>
           )}
 
         </div>
@@ -556,10 +590,10 @@ export default function SeatMapGrid({
                     onMouseDown={(e) => handleMouseDown(seat.id, e)}
                     onTouchStart={(e) => handleTouchStart(seat.id, e)}
                     style={getSeatCoords(seat.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-[26px] h-[26px] rounded-full flex items-center justify-center font-mono font-extrabold text-[9px] transition-all z-20 cursor-move hover:scale-110 active:scale-95 ${isGreen ? '' : ''}`}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-[26px] h-[26px] rounded-full flex items-center justify-center font-mono font-extrabold text-[9px] transition-all z-20 ${isLocked ? 'cursor-pointer' : 'cursor-move hover:scale-110 active:scale-95'} ${isGreen ? '' : ''}`}
                     title={`ที่นั่ง ${seat.id}: ${
                       isGreen ? 'มีเสื้อชูชีพปกติ' : isMissing ? 'ไม่มีเสื้อชูชีพ' : 'มีเสื้อชูชีพแต่ชำรุด/เก่า'
-                    } (คลิกเพื่อเปลี่ยนสถานะ / ลากเพื่อจัดตำแหน่งได้)`}
+                    }${isLocked ? ' (🔒 ล็อคอยู่ — กด ปลดล็อค เพื่อย้ายจุด)' : ' (คลิกเพื่อเปลี่ยนสถานะ / ลากเพื่อจัดตำแหน่งได้)'}`}
                   >
                     {isGreen ? (
                       <img
