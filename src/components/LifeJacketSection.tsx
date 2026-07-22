@@ -370,35 +370,7 @@ export default function LifeJacketSection({
           </div>
         )}
 
-        {/* Boat Layout Image */}
-        {activeBoat && (
-          <div className="border-b border-slate-200">
-            <div className="px-5 py-3 bg-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🗺️</span>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  แผนผังตำแหน่งเสื้อชูชีพบนเรือ {activeBoat.boatName}
-                </h3>
-              </div>
-              <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 font-mono">
-                {activeBoat.boatName.startsWith('CTB') ? 'CTB BOAT LAYOUT' : 'R BOAT LAYOUT'}
-              </span>
-            </div>
-            <div className="p-4 flex justify-center bg-white">
-              <img
-                src={activeBoat.boatName.startsWith('CTB') ? ctbLayoutImg : rLayoutImg}
-                alt={`แผนผังเรือ ${activeBoat.boatName}`}
-                className="max-w-full h-auto rounded border border-slate-200 shadow-sm"
-                style={{ maxHeight: '350px', objectFit: 'contain' }}
-              />
-            </div>
-            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200">
-              <p className="text-[10px] text-slate-500 text-center font-medium">
-                📍 จุดสีแดงแสดงตำแหน่งติดตั้งถังดับเพลิง/เสื้อชูชีพ | หมายเลขวงกลมแสดงลำดับอุปกรณ์ประจำเรือ
-              </p>
-            </div>
-          </div>
-        )}
+
 
         {/* Interactive Workspace Grid */}
         <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -641,15 +613,15 @@ export default function LifeJacketSection({
                   {formSeats.filter(s => s.status === 'green').length} ตัว
                 </span>
               </div>
-              <div className="p-2 rounded bg-rose-50 border border-rose-100 animate-pulse">
+              <div className="p-2 rounded bg-red-100 border border-red-300 animate-pulse">
                 <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">ไม่มีชูชีพ (🔴)</span>
-                <span className="text-lg font-black text-rose-700 font-mono">
+                <span className="text-lg font-black text-red-600 font-mono">
                   {formSeats.filter(s => s.status === 'red').length} ตัว
                 </span>
               </div>
-              <div className="p-2 rounded bg-amber-50 border border-amber-100">
+              <div className="p-2 rounded bg-orange-100 border border-orange-300">
                 <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">ชูชีพชำรุด (🟠)</span>
-                <span className="text-lg font-black text-amber-700 font-mono">
+                <span className="text-lg font-black text-orange-600 font-mono">
                   {formSeats.filter(s => s.status === 'orange').length} ตัว
                 </span>
               </div>
