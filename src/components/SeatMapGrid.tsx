@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v8 positions so the new layout defaults show up automatically
+      // Clear old v9 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v9') {
+      if (version !== 'v10') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v9');
+        localStorage.setItem('boat_seat_positions_version', 'v10');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
@@ -250,6 +250,10 @@ export default function SeatMapGrid({
     const boatKey = boatName || 'Standard';
     if (customPositions[boatKey] && customPositions[boatKey][seatId]) {
       return customPositions[boatKey][seatId];
+    }
+    // For R-boats (R1, R2, R3, R4), fallback to R1's custom layout if available
+    if (!isCTB && customPositions['R1'] && customPositions['R1'][seatId]) {
+      return customPositions['R1'][seatId];
     }
 
     const match = seatId.match(/^(\d+)([A-F])$/);
@@ -508,12 +512,18 @@ export default function SeatMapGrid({
               </div>
 
               {seats?.map((seat) => {
-                const statusColor = 
-                  seat.status === 'green' 
-                    ? 'bg-transparent border-none shadow-none text-transparent' 
-                    : seat.status === 'red'
-                    ? 'bg-rose-600 hover:bg-rose-550 border border-rose-700 text-slate-950 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)] border-red-500'
-                    : 'bg-amber-500 hover:bg-amber-455 border border-amber-600 text-slate-950 shadow-[0_0_6px_rgba(245,158,11,0.5)]';
+                // For diagram view we render a clear circular marker for red/orange statuses.
+                // Keep green seats showing the life_jacket image to indicate normal state.
+                const isGreen = seat.status === 'green';
+                const isMissing = seat.status === 'red';
+                const isDamaged = seat.status === 'orange';
+
+                // Render missing as red (with life-jacket icon), damaged as green.
+                const markerStyle: React.CSSProperties | undefined = isMissing
+                  ? { background: '#FF3B30', boxShadow: '0 0 10px rgba(255,59,48,0.9)' } // bright red
+                  : isDamaged
+                  ? { background: '#10B981', boxShadow: '0 0 10px rgba(16,185,129,0.85)' } // bright green
+                  : undefined;
 
                 return (
                   <button
@@ -522,19 +532,32 @@ export default function SeatMapGrid({
                     onMouseDown={(e) => handleMouseDown(seat.id, e)}
                     onTouchStart={(e) => handleTouchStart(seat.id, e)}
                     style={getSeatCoords(seat.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 ${seat.status === 'green' ? 'w-[26px] h-[26px]' : 'w-5 h-5'} rounded-full flex items-center justify-center font-mono font-extrabold text-[7px] transition-all z-20 cursor-move hover:scale-130 active:scale-95 ${statusColor}`}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-[26px] h-[26px] rounded-full flex items-center justify-center font-mono font-extrabold text-[9px] transition-all z-20 cursor-move hover:scale-110 active:scale-95 ${isGreen ? '' : ''}`}
                     title={`ที่นั่ง ${seat.id}: ${
-                      seat.status === 'green' ? 'มีเสื้อชูชีพปกติ' : seat.status === 'red' ? 'ไม่มีเสื้อชูชีพ' : 'มีเสื้อชูชีพแต่ชำรุด/เก่า'
+                      isGreen ? 'มีเสื้อชูชีพปกติ' : isMissing ? 'ไม่มีเสื้อชูชีพ' : 'มีเสื้อชูชีพแต่ชำรุด/เก่า'
                     } (คลิกเพื่อเปลี่ยนสถานะ / ลากเพื่อจัดตำแหน่งได้)`}
                   >
-                    {seat.status === 'green' ? (
-                      <img 
-                        src="/life_jacket.png" 
-                        alt="Life Jacket" 
+                    {isGreen ? (
+                      <img
+                        src="/life_jacket.png"
+                        alt={`Life Jacket ${seat.status}`}
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      seat.id
+                      <span
+                        className="w-full h-full rounded-full flex items-center justify-center text-white text-[9px] font-extrabold overflow-hidden relative"
+                        style={markerStyle}
+                      >
+                          <img
+                            src="/life_jacket.png"
+                            alt={`Life Jacket ${seat.status}`}
+                            className="object-contain"
+                            style={{ width: '60%', height: '60%' }}
+                          />
+                        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-white text-[9px] font-extrabold">
+                          {seat.id.match(/\d+/)?.[0]}
+                        </span>
+                      </span>
                     )}
                   </button>
                 );
@@ -545,15 +568,15 @@ export default function SeatMapGrid({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-900 text-[10px] font-bold text-slate-500 font-mono">
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center sm:justify-start">
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border border-emerald-600 inline-block shadow-[0_0_4px_rgba(16,185,129,0.5)]" />
+                <span className="w-4 h-4 inline-block"><img src="/life_jacket.png" alt="มีชูชีพ" className="w-full h-full object-contain" /></span>
                 <span>มีชูชีพปกติ ({seats?.filter(s => s.status === 'green').length || 0})</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 bg-rose-600 rounded-full border border-rose-700 inline-block animate-pulse shadow-[0_0_4px_rgba(239,68,68,0.5)]" />
+                <span className="w-4 h-4 inline-block rounded-full" style={{ background: '#FF3B30', boxShadow: '0 0 6px rgba(255,59,48,0.8)' }} />
                 <span>ไม่มีชูชีพ ({seats?.filter(s => s.status === 'red').length || 0})</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full border border-amber-600 inline-block shadow-[0_0_4px_rgba(245,158,11,0.5)]" />
+                <span className="w-4 h-4 inline-block rounded-full" style={{ background: '#10B981', boxShadow: '0 0 6px rgba(16,185,129,0.8)' }} />
                 <span>ชูชีพชำรุด/เก่า ({seats?.filter(s => s.status === 'orange').length || 0})</span>
               </div>
             </div>
@@ -603,12 +626,18 @@ export default function SeatMapGrid({
                       );
                     }
                     
-                    const statusColor = 
-                      seat.status === 'green' 
-                        ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-700 text-emerald-50' 
+                    const statusColor =
+                      seat.status === 'green'
+                        ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-700 text-emerald-50'
                         : seat.status === 'red'
-                        ? 'bg-rose-650 hover:bg-rose-600 border-rose-800 text-rose-50 animate-pulse'
-                        : 'bg-amber-500 hover:bg-amber-450 border-amber-650 text-slate-950';
+                        ? 'bg-red-500 hover:bg-red-400 border-red-600 text-white animate-pulse'
+                        : 'bg-orange-500 hover:bg-orange-400 border-orange-600 text-white';
+
+                    const gridFilterStyle = seat.status === 'red'
+                      ? { filter: 'hue-rotate(115deg) saturate(2.5) brightness(1.1)' }
+                      : seat.status === 'orange'
+                      ? { filter: 'hue-rotate(170deg) saturate(1.8) brightness(1.1)' }
+                      : {};
 
                     return (
                       <button
@@ -617,8 +646,8 @@ export default function SeatMapGrid({
                         disabled={!interactive}
                         onClick={() => onSeatClick && onSeatClick(seatId)}
                         className={`h-7 rounded border font-mono font-bold text-[9px] flex flex-col items-center justify-center transition-all ${statusColor} ${
-                          interactive 
-                            ? 'cursor-pointer active:scale-90 active:opacity-85' 
+                          interactive
+                            ? 'cursor-pointer active:scale-90 active:opacity-85'
                             : 'cursor-default'
                         }`}
                         title={`ที่นั่ง ${seatId}: ${
@@ -626,8 +655,13 @@ export default function SeatMapGrid({
                         }`}
                       >
                         <span>{seatId}</span>
-                        <span className="text-[6px] leading-none mt-0.5">
-                          {seat.status === 'green' ? '🟢' : seat.status === 'red' ? '🔴' : '🟠'}
+                        <span className="w-3.5 h-3.5 inline-block mt-0.5">
+                          <img
+                            src="/life_jacket.png"
+                            alt={`Life Jacket ${seat.status}`}
+                            className="w-full h-full object-contain"
+                            style={gridFilterStyle}
+                          />
                         </span>
                       </button>
                     );

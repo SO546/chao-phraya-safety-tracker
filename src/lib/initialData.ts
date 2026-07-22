@@ -614,25 +614,29 @@ export const generateInitialLifeJackets = (): BoatLifeJacketState[] => {
       lastInspectedDate = '2026-06-21';
       lastInspector = 'อนุรักษ์ ล้อมแก้ว';
       overallStatus = 'Pass';
-    } else if (idx === 3) { // R1 - Kid jackets low stock
+    } else if (idx === 3) { // R1
       lastInspectedDate = '2026-06-22';
       lastInspector = 'อรรถพล กองกลาง';
-      kidsStatus = 'LowStock';
-      overallStatus = 'Fail';
-      remarks = 'เสื้อชูชีพสำหรับเด็กบนเรือมีไม่เพียงพอต่อปริมาณผู้โดยสารเด็กขั้นต่ำ (ต้องการเพิ่มอีก 5 ตัว)';
+      overallStatus = 'Pass';
+      remarks = 'เสื้อชูชีพประจำที่นั่งติดตั้งครบถ้วน 126 จุด สภาพสมบูรณ์พร้อมใช้งาน';
     } else if (idx === 4) { // R2
       lastInspectedDate = '2026-06-23';
       lastInspector = 'พิมลพา สุขสะอาด';
       overallStatus = 'Pass';
-    } else if (idx === 6) { // R4 - Lights damaged
+      remarks = 'เสื้อชูชีพประจำที่นั่งติดตั้งครบถ้วน 126 จุด สภาพสมบูรณ์พร้อมใช้งาน';
+    } else if (idx === 5) { // R3
+      lastInspectedDate = '2026-06-22';
+      lastInspector = 'อนุรักษ์ ล้อมแก้ว';
+      overallStatus = 'Pass';
+      remarks = 'เสื้อชูชีพประจำที่นั่งติดตั้งครบถ้วน 126 จุด สภาพสมบูรณ์พร้อมใช้งาน';
+    } else if (idx === 6) { // R4
       lastInspectedDate = '2026-06-22';
       lastInspector = 'สมชาย นาวาดี';
-      lightStatus = 'Damaged';
-      overallStatus = 'Fail';
-      remarks = 'พบไฟกะพริบแจ้งตำแหน่งชูชีพถ่านเสื่อมสภาพ/ชำรุด 2 ชิ้น รอการซ่อมบำรุงหรือเปลี่ยนใหม่';
+      overallStatus = 'Pass';
+      remarks = 'เสื้อชูชีพประจำที่นั่งติดตั้งครบถ้วน 126 จุด สภาพสมบูรณ์พร้อมใช้งาน';
     }
 
-    // Generate beautiful 6-column dynamic seat layouts for passenger life jackets
+    // Generate dynamic seat layouts for passenger life jackets (130 for CTB, 126 for R)
     const seats: { id: string; status: 'green' | 'red' | 'orange' }[] = [];
     const isCTB = boat.name.toUpperCase().startsWith('CTB');
     const maxRows = isCTB ? 22 : 21;
@@ -646,18 +650,10 @@ export const generateInitialLifeJackets = (): BoatLifeJacketState[] => {
         }
         
         let status: 'green' | 'red' | 'orange' = 'green';
-        if (idx === 1) { // CTB2
+        if (idx === 1) { // CTB2 seed issues
           if (r === 3 && c === 'A') status = 'red';
           if (r === 5 && c === 'C') status = 'orange';
           if (r === 8 && c === 'D') status = 'red';
-        } else if (idx === 3) { // R1
-          if (r === 2 && c === 'B') status = 'red';
-          if (r === 4 && c === 'D') status = 'red';
-          if (r === 7 && c === 'A') status = 'orange';
-        } else if (idx === 6) { // R4
-          if (r === 1 && c === 'C') status = 'orange';
-          if (r === 5 && c === 'B') status = 'orange';
-          if (r === 9 && c === 'D') status = 'orange';
         }
         seats.push({ id: `${r}${c}`, status });
       });
