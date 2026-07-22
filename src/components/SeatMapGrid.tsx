@@ -216,6 +216,8 @@ export default function SeatMapGrid({
   onCabinetClick
 }: SeatMapGridProps) {
   const [viewMode, setViewMode] = useState<'diagram' | 'table'>('diagram');
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [savedConfirmed, setSavedConfirmed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Load custom seat positions from localStorage
@@ -337,6 +339,20 @@ export default function SeatMapGrid({
       localStorage.setItem('boat_seat_positions', JSON.stringify(next));
       return next;
     });
+    setHasPendingChanges(false);
+    setSavedConfirmed(false);
+  };
+
+  const handleSavePositions = () => {
+    // Positions are already saved in localStorage during drag, just confirm and lock
+    const boatKey = boatName || 'Standard';
+    const current = customPositions[boatKey] || {};
+    const saved = JSON.parse(localStorage.getItem('boat_seat_positions') || '{}');
+    saved[boatKey] = current;
+    localStorage.setItem('boat_seat_positions', JSON.stringify(saved));
+    setHasPendingChanges(false);
+    setSavedConfirmed(true);
+    setTimeout(() => setSavedConfirmed(false), 2500);
   };
 
   // Mouse drag handler for repositioning dots
@@ -362,6 +378,7 @@ export default function SeatMapGrid({
       const leftPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
       const topPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
 
+      setHasPendingChanges(true);
       setCustomPositions((prev) => {
         const boatKey = boatName || 'Standard';
         const next = {
@@ -416,6 +433,7 @@ export default function SeatMapGrid({
       const leftPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
       const topPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
 
+      setHasPendingChanges(true);
       setCustomPositions((prev) => {
         const boatKey = boatName || 'Standard';
         const next = {
@@ -451,13 +469,27 @@ export default function SeatMapGrid({
           <span className="text-[10px] md:text-[11px] font-bold text-slate-700 font-mono uppercase">
             🚢 {boatName || 'Standard'} Seat Map
           </span>
-          {Object.keys(customPositions[boatName || 'Standard'] || {}).length > 0 && (
+          {hasPendingChanges && (
+            <button
+              onClick={handleSavePositions}
+              className="ml-2 text-[9px] font-black text-emerald-900 bg-emerald-100 hover:bg-emerald-200 border border-emerald-400 px-2 py-0.5 rounded cursor-pointer transition-all font-sans flex items-center gap-1 animate-pulse"
+              title="ยืนยันและบันทึกตำแหน่งจุดที่ลากวางไว้ทั้งหมด"
+            >
+              ✅ ยืนยันและบันทึกจุด
+            </button>
+          )}
+          {savedConfirmed && (
+            <span className="ml-2 text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded font-sans flex items-center gap-1">
+              🔒 บันทึกแล้ว!
+            </span>
+          )}
+          {Object.keys(customPositions[boatName || 'Standard'] || {}).length > 0 && !hasPendingChanges && !savedConfirmed && (
             <button
               onClick={handleResetPositions}
-              className="ml-2 text-[9px] font-black text-rose-700 bg-rose-50/40 hover:bg-rose-200 border border-rose-300 px-2 py-0.5 rounded cursor-pointer transition-all uppercase font-sans flex items-center gap-1"
-              title="รีเซ็ตพิกัดตำแหน่งที่นั่งทั้งหมดเป็นค่าเริ่มต้น"
+              className="ml-2 text-[9px] font-black text-slate-500 bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border border-slate-300 hover:border-rose-300 px-2 py-0.5 rounded cursor-pointer transition-all font-sans flex items-center gap-1"
+              title="ล้างพิกัดที่กำหนดเองทั้งหมด กลับสู่ตำแหน่งเริ่มต้น"
             >
-              🔄 รีเซ็ตจุด
+              🔄 รีเซ็ต
             </button>
           )}
         </div>
