@@ -221,11 +221,11 @@ export default function SeatMapGrid({
   // Load custom seat positions from localStorage
   const [customPositions, setCustomPositions] = useState<Record<string, Record<string, { left: string; top: string }>>>(() => {
     try {
-      // Clear old v9 positions so the new layout defaults show up automatically
+      // Clear old v10 positions so the new layout defaults show up automatically
       const version = localStorage.getItem('boat_seat_positions_version');
-      if (version !== 'v10') {
+      if (version !== 'v11') {
         localStorage.removeItem('boat_seat_positions');
-        localStorage.setItem('boat_seat_positions_version', 'v10');
+        localStorage.setItem('boat_seat_positions_version', 'v11');
         return {};
       }
       const saved = localStorage.getItem('boat_seat_positions');
